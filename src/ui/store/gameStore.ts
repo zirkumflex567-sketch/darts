@@ -21,6 +21,7 @@ interface GameStoreState {
   setMode: (mode: GameMode) => void;
   setPlayers: (players: Player[]) => void;
   startMatch: (mode: GameMode) => Promise<void>;
+  queueDetectedHit: (hit: ScoringHit) => void;
   applyManualHit: (hit: ScoringHit) => Promise<void>;
   undoLastVisit: () => void;
   toggleDummyScoring: () => void;
@@ -64,6 +65,7 @@ export const useGameStore = create<GameStoreState>((set, get) => ({
       set({ match, mode, cricketState: CricketEngine.getLegState(match, match.legs[0]), x01State: null });
     }
   },
+  queueDetectedHit: (hit) => set({ currentHit: hit, hitModalOpen: true }),
   applyManualHit: async (hit) => {
     const match = get().match;
     const mode = get().mode;

@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useGameStore } from '../store/gameStore';
 import { Scoreboard } from '../components/Scoreboard';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { HitCorrectionModal } from '../components/HitCorrectionModal';
+import { CameraScoringView } from '../components/CameraScoringView';
 
 export const GameScreen = () => {
   const match = useGameStore((s) => s.match);
@@ -13,11 +14,13 @@ export const GameScreen = () => {
   const hitModalOpen = useGameStore((s) => s.hitModalOpen);
   const currentHit = useGameStore((s) => s.currentHit);
   const applyManualHit = useGameStore((s) => s.applyManualHit);
+  const queueDetectedHit = useGameStore((s) => s.queueDetectedHit);
   const undoLastVisit = useGameStore((s) => s.undoLastVisit);
   const toggleDummyScoring = useGameStore((s) => s.toggleDummyScoring);
   const dummyScoringActive = useGameStore((s) => s.dummyScoringActive);
   const openManualHit = useGameStore((s) => s.openManualHit);
   const closeHitModal = useGameStore((s) => s.closeHitModal);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
 
   if (!match) {
     return (
@@ -33,10 +36,15 @@ export const GameScreen = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Match: {mode}</Text>
+      {cameraEnabled && <CameraScoringView onDetect={queueDetectedHit} />}
       <Scoreboard players={match.players} activePlayerId={activePlayerId} scores={scores} />
       <View style={styles.actions}>
         <PrimaryButton
-          label={dummyScoringActive ? 'Autoscoring stoppen' : 'Autoscoring starten'}
+          label={cameraEnabled ? 'Kamera aus' : 'Kamera an (Tap-Erkennung)'}
+          onPress={() => setCameraEnabled((prev) => !prev)}
+        />
+        <PrimaryButton
+          label={dummyScoringActive ? 'Autoscoring Dummy stoppen' : 'Autoscoring Dummy starten'}
           onPress={toggleDummyScoring}
         />
         <PrimaryButton label="Manueller Wurf" onPress={openManualHit} />

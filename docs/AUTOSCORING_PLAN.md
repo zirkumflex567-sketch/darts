@@ -114,3 +114,8 @@ Echte, live Kamera-basierte Erkennung von Darttreffern und automatischer Score-B
 3. Kleiner annotierter Datensatz
 4. ML-Modell-Prototyp (Phase 2)
 5. Integration in Custom Dev Client
+
+## Implementierungsstatus (MVP-Phase)
+- Kamera-Vorschau ueber `expo-camera` integriert.
+- Tap-zu-Score: Tippen auf das Board im Kamerabild erzeugt einen Treffer und oeffnet den Korrektur-Dialog.
+- Automatische Erkennung ist noch nicht aktiv (erfordert ML/Native Pipeline).
