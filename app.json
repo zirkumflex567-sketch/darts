@@ -34,7 +34,8 @@
     },
     "plugins": [
       "expo-sqlite",
-      "expo-camera"
+      "expo-camera",
+      "expo-dev-client"
     ]
   }
 }
