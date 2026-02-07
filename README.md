@@ -1,12 +1,23 @@
 # darts
 
-Dokumentation für das Dartsmind-Rebuild-Projekt.
+Dartsmind MVP als React-Native-(Expo)-App mit Web-Unterstuetzung.
 
-## Schnellzugriff
-- Ausführliche Doku: `docs/APP_DOC.md`
-- Quellinfo: `info.md`
+## Schnellstart (VPS)
+```bash
+npm install
+npm run dev:web
+```
 
-## Kurz-Schnellstart
-1. Lies `docs/APP_DOC.md` für Scope, Features und Prompt-Vorlagen.
-2. Lege den Ziel-Stack fest (native oder cross-platform).
-3. Starte mit dem Prompt-Pack, um MVP-Module zu erzeugen.
+Weitere Kommandos:
+```bash
+npm run dev
+npm run dev:tunnel
+npm test
+npm run lint
+```
+
+## Doku
+- Ausfuehrliche Doku: `docs/APP_DOC.md`
+- Architektur: `docs/ARCHITECTURE.md`
+- Domain Model: `docs/DOMAIN_MODEL.md`
+- Prompt-Ablauf: `docs/prompts/00-README.md`
