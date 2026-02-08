@@ -27,3 +27,12 @@ Siehe: `docs/DEV_CLIENT.md`
 - Domain Model: `docs/DOMAIN_MODEL.md`
 - Autoscoring Plan: `docs/AUTOSCORING_PLAN.md`
 - Prompt-Ablauf: `docs/prompts/00-README.md`
+
+
+
+## here are some examples of working apps
+https://www.reddit.com/r/Darts/comments/dlsftt/introducing_ios_darts_app_dartsmind/?tl=de
+https://github.com/DartCaller/darts-recognition
+https://github.com/kcapp
+https://github.com/gsbrown/darts-app
+https://github.com/lbormann/darts-hub
