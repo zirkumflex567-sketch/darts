@@ -124,6 +124,8 @@ Echte, live Kamera-basierte Erkennung von Darttreffern und automatischer Score-B
 - Kamera-Vorschau ueber `expo-camera` integriert.
 - Tap-zu-Score: Tippen auf das Board im Kamerabild erzeugt einen Treffer und oeffnet den Korrektur-Dialog.
 - Automatische Erkennung ist noch nicht aktiv (erfordert ML/Native Pipeline).
+- Heuristik-PoC: Baseline/Scan (Frame-Differenz) zur groben Treffer-Erkennung.
+- Hinweis: PoC ist experimentell und braucht ruhige Hand und gutes Licht.
 
 ## Custom Dev Client erforderlich
 - Kamera + ML Module laufen nicht in Expo Go.

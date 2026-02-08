@@ -97,6 +97,7 @@ Anforderungen:
 - Erkennung mehrerer Treffer pro Visit
 - Kalibrierung per Board-Mitte und optionaler 4-Punkt-Kalibrierung
 - Zoom via Slider und Pinch-Geste
+- PoC-Modus: Baseline/Scan (Frame-Differenz) fuer erste Treffer
 
 Edge Cases:
 - Okklusion durch Hand oder Dartkörper
@@ -106,6 +107,8 @@ Edge Cases:
 Akzeptanzkriterien:
 - Wurf wird innerhalb weniger Sekunden verarbeitet
 - Nutzer kann Ergebnis korrigieren und fortfahren
+Hinweis:
+- Detaillierte Setup-Schritte stehen in `docs/SETUP_GUIDE.md`.
 
 ### 3) Dual-Device-Modus
 Ziele:

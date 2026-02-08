@@ -37,6 +37,15 @@ Diese Option korrigiert Perspektiven und Winkel.
 - Bei Kamerabewegung erneut kalibrieren.
 - `Reset` setzt alle Werte auf Standard.
 
+## Autoscoring PoC (Baseline/Scan)
+Dieser Modus ist experimentell und dient nur als Proof-of-Concept.
+1. Stelle sicher, dass keine Hand im Bild ist.
+2. `Baseline` druecken (leeres Board speichern).
+3. Dart werfen, Hand rausnehmen.
+4. `Scan` druecken (Differenzanalyse startet).
+5. Ergebnis wird als Treffer angezeigt oder kann manuell korrigiert werden.
+Hinweis: Bei starkem Lichtwechsel oder Bewegung kann die Erkennung fehlschlagen.
+
 ## Fehlerdiagnose
 - Treffer liegt daneben -> Board-Mitte und Rotation pruefen.
 - Treffer grob falsch -> 4-Punkt-Kalibrierung wiederholen.

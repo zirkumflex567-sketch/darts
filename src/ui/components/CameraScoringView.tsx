@@ -7,6 +7,7 @@ import { ScoringHit } from '../../domain/scoring/types';
 import { clamp } from '../../shared/utils';
 import { useCameraSettingsStore } from '../store/cameraSettingsStore';
 import { applyHomography, computeHomography, Point } from '../utils/homography';
+import { detectDartFromDiff } from '../utils/dartDetection';
 
 const BOARD_NUMBERS = [
   20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5,
@@ -94,6 +95,8 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   const [calibrationStep, setCalibrationStep] = useState<number | null>(null);
   const [calibrationDraft, setCalibrationDraft] = useState<Point[]>([]);
   const [liveZoom, setLiveZoom] = useState(0);
+  const [baselineBase64, setBaselineBase64] = useState<string | null>(null);
+  const [detectStatus, setDetectStatus] = useState<string | null>(null);
   const cameraRef = useRef<CameraViewRef | null>(null);
   const pinchStartZoom = useRef(0);
 
@@ -201,6 +204,71 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     },
     [liveZoom, update]
   );
+
+  const captureBaseline = useCallback(async () => {
+    if (!cameraRef.current) return;
+    setDetectStatus('Baseline erfassen...');
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.2,
+        base64: true,
+        skipProcessing: true,
+      });
+      if (!photo?.base64) {
+        setDetectStatus('Baseline fehlgeschlagen');
+        return;
+      }
+      setBaselineBase64(photo.base64);
+      setDetectStatus('Baseline gespeichert');
+    } catch {
+      setDetectStatus('Baseline fehlgeschlagen');
+    }
+  }, []);
+
+  const runDetection = useCallback(async () => {
+    if (!cameraRef.current) return;
+    if (!baselineBase64) {
+      setDetectStatus('Bitte Baseline setzen');
+      return;
+    }
+    setDetectStatus('Scan laeuft...');
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.2,
+        base64: true,
+        skipProcessing: true,
+      });
+      if (!photo?.base64) {
+        setDetectStatus('Scan fehlgeschlagen');
+        return;
+      }
+      const detection = detectDartFromDiff(baselineBase64, photo.base64, {
+        centerX: settings.centerX,
+        centerY: settings.centerY,
+        scale: settings.scale,
+        calibrationPoints: settings.calibrationPoints,
+      });
+      if (!detection) {
+        setDetectStatus('Kein Treffer erkannt');
+        return;
+      }
+      const hit = computeHit(
+        detection.x * layout.width,
+        detection.y * layout.height,
+        layout.width,
+        layout.height,
+        settings
+      );
+      if (!hit) {
+        setDetectStatus('Treffer ausserhalb');
+        return;
+      }
+      setDetectStatus(`Treffer ${hit.multiplier}${hit.segment} (${hit.points})`);
+      onDetect(hit);
+    } catch {
+      setDetectStatus('Scan fehlgeschlagen');
+    }
+  }, [baselineBase64, layout.height, layout.width, onDetect, settings]);
 
   if (!permission?.granted) {
     return (
@@ -394,6 +462,22 @@ export const CameraScoringView = ({ onDetect }: Props) => {
               </Pressable>
             )}
           </View>
+        </View>
+        <View style={styles.adjustRow}>
+          <Text style={styles.label}>Autoscoring PoC</Text>
+          <Text style={styles.meta}>
+            Hand aus dem Bild, dann Baseline setzen und nach dem Wurf scannen.
+          </Text>
+          <View style={styles.controls}>
+            <Pressable style={styles.controlButton} onPress={captureBaseline}>
+              <Text>Baseline</Text>
+            </Pressable>
+            <Pressable style={styles.controlButton} onPress={runDetection}>
+              <Text>Scan</Text>
+            </Pressable>
+            <Text style={styles.meta}>{baselineBase64 ? 'Baseline OK' : 'Keine Baseline'}</Text>
+          </View>
+          {detectStatus && <Text style={styles.meta}>{detectStatus}</Text>}
         </View>
         <Pressable style={styles.reset} onPress={reset}>
           <Text style={styles.resetText}>Reset</Text>

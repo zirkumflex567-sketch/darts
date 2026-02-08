@@ -16,8 +16,8 @@ Erstelle einen minimalen, lokal laufenden Autoscoring-PoC ohne ML. Ziel: Treffer
 
 ## Umsetzungsschritte
 1. Frame Capture:
-   - Periodische Einzelbilder der Kamera (z.B. alle 300-500 ms) aufnehmen.
-   - Vorher/Nachher Bild speichern.
+   - Baseline-Frame speichern (leeres Board).
+   - Scan-Frame nach dem Wurf aufnehmen (manueller Trigger).
 2. Bewegungserkennung:
    - Pixel-Differenz berechnen (Schwellwert).
    - Groesste Kontur/Cluster als Dart-Region annehmen.
