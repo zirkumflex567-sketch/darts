@@ -144,6 +144,17 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     [hasPermission, device, layout.width, layout.height]
   );
 
+  const format = useMemo(() => {
+    const formats = device?.formats ?? [];
+    if (formats.length === 0) return undefined;
+    return formats.reduce((best, current) => {
+      if (!best) return current;
+      const bestPixels = (best.videoWidth ?? 0) * (best.videoHeight ?? 0);
+      const currentPixels = (current.videoWidth ?? 0) * (current.videoHeight ?? 0);
+      return currentPixels > bestPixels ? current : best;
+    }, formats[0]);
+  }, [device]);
+
   const onLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
     setLayout({ width, height });
@@ -320,16 +331,6 @@ export const CameraScoringView = ({ onDetect }: Props) => {
       </View>
     );
   }
-
-  const format = useMemo(() => {
-    const formats = device.formats ?? [];
-    return formats.reduce((best, current) => {
-      if (!best) return current;
-      const bestPixels = (best.videoWidth ?? 0) * (best.videoHeight ?? 0);
-      const currentPixels = (current.videoWidth ?? 0) * (current.videoHeight ?? 0);
-      return currentPixels > bestPixels ? current : best;
-    }, formats[0]);
-  }, [device.formats]);
 
   const zoomMin = device.minZoom ?? 1;
   const zoomMax = device.maxZoom ?? 1;
