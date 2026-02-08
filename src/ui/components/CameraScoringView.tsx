@@ -2,9 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-native';
 import { CameraView, CameraViewRef, useCameraPermissions } from 'expo-camera';
 import Slider from '@react-native-community/slider';
+import { PinchGestureHandler, State } from 'react-native-gesture-handler';
 import { ScoringHit } from '../../domain/scoring/types';
 import { clamp } from '../../shared/utils';
 import { useCameraSettingsStore } from '../store/cameraSettingsStore';
+import { applyHomography, computeHomography, Point } from '../utils/homography';
 
 const BOARD_NUMBERS = [
   20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5,
@@ -19,16 +21,45 @@ const computeHit = (
   y: number,
   width: number,
   height: number,
-  settings: { centerX: number; centerY: number; rotationDeg: number; scale: number }
+  settings: {
+    centerX: number;
+    centerY: number;
+    rotationDeg: number;
+    scale: number;
+    calibrationPoints?: Point[];
+  }
 ): ScoringHit | null => {
-  const centerX = width * settings.centerX;
-  const centerY = height * settings.centerY;
-  const dx = x - centerX;
-  const dy = centerY - y;
-  const radius = Math.min(width, height) / 2;
-  const effectiveRadius = radius * settings.scale;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  const r = dist / effectiveRadius;
+  let dx = 0;
+  let dy = 0;
+  let r = 0;
+
+  if (settings.calibrationPoints && settings.calibrationPoints.length === 4) {
+    const src = settings.calibrationPoints.map((pt) => ({
+      x: pt.x * width,
+      y: pt.y * height,
+    }));
+    const dst: Point[] = [
+      { x: 0, y: 1 }, // 20 (oben)
+      { x: 1, y: 0 }, // 6 (rechts)
+      { x: 0, y: -1 }, // 3 (unten)
+      { x: -1, y: 0 }, // 11 (links)
+    ];
+    const homography = computeHomography(src, dst);
+    const projected = homography ? applyHomography(homography, { x, y }) : null;
+    if (!projected) return null;
+    dx = projected.x;
+    dy = projected.y;
+    r = Math.sqrt(dx * dx + dy * dy);
+  } else {
+    const centerX = width * settings.centerX;
+    const centerY = height * settings.centerY;
+    dx = x - centerX;
+    dy = centerY - y;
+    const radius = Math.min(width, height) / 2;
+    const effectiveRadius = radius * settings.scale;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    r = dist / effectiveRadius;
+  }
 
   if (r > 1.0) return null;
 
@@ -60,13 +91,23 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   const [permission, requestPermission] = useCameraPermissions();
   const [layout, setLayout] = useState({ width: 0, height: 0 });
   const [setupMode, setSetupMode] = useState(false);
+  const [calibrationStep, setCalibrationStep] = useState<number | null>(null);
+  const [calibrationDraft, setCalibrationDraft] = useState<Point[]>([]);
+  const [liveZoom, setLiveZoom] = useState(0);
   const cameraRef = useRef<CameraViewRef | null>(null);
+  const pinchStartZoom = useRef(0);
 
   const { settings, load, update, reset } = useCameraSettingsStore();
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (calibrationStep === null) {
+      setCalibrationDraft([]);
+    }
+  }, [calibrationStep]);
 
   const ready = useMemo(
     () => permission?.granted && layout.width > 0 && layout.height > 0,
@@ -109,15 +150,57 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   const onTouch = (event: any) => {
     if (!ready) return;
     const { locationX, locationY } = event.nativeEvent;
+    if (calibrationStep !== null) {
+      const nextPoint = {
+        x: clamp(locationX / layout.width, 0.02, 0.98),
+        y: clamp(locationY / layout.height, 0.02, 0.98),
+      };
+      const nextDraft = [...calibrationDraft, nextPoint];
+      if (calibrationStep >= 3) {
+        void update({ calibrationPoints: nextDraft });
+        setCalibrationStep(null);
+        setCalibrationDraft([]);
+      } else {
+        setCalibrationDraft(nextDraft);
+        setCalibrationStep(calibrationStep + 1);
+      }
+      return;
+    }
     if (setupMode) {
       const centerX = clamp(locationX / layout.width, 0.05, 0.95);
       const centerY = clamp(locationY / layout.height, 0.05, 0.95);
-      update({ centerX, centerY });
+      void update({ centerX, centerY });
       return;
     }
     const hit = computeHit(locationX, locationY, layout.width, layout.height, settings);
     if (hit) onDetect(hit);
   };
+
+  useEffect(() => {
+    setLiveZoom(settings.zoom);
+  }, [settings.zoom]);
+
+  const onPinchEvent = useCallback(
+    (event: any) => {
+      const scale = event.nativeEvent.scale ?? 1;
+      const nextZoom = clamp(pinchStartZoom.current + (scale - 1) * 0.3, 0, 1);
+      setLiveZoom(nextZoom);
+    },
+    [setLiveZoom]
+  );
+
+  const onPinchStateChange = useCallback(
+    (event: any) => {
+      const state = event.nativeEvent.state;
+      if (state === State.BEGAN) {
+        pinchStartZoom.current = liveZoom;
+      }
+      if (state === State.END || state === State.CANCELLED || state === State.FAILED) {
+        void update({ zoom: clamp(liveZoom, 0, 1) });
+      }
+    },
+    [liveZoom, update]
+  );
 
   if (!permission?.granted) {
     return (
@@ -132,25 +215,82 @@ export const CameraScoringView = ({ onDetect }: Props) => {
 
   const crossLeft = layout.width * settings.centerX - 8;
   const crossTop = layout.height * settings.centerY - 8;
+  const boardRadius = (Math.min(layout.width, layout.height) / 2) * settings.scale;
+  const boardLeft = layout.width * settings.centerX - boardRadius;
+  const boardTop = layout.height * settings.centerY - boardRadius;
+  const hasCalibration = settings.calibrationPoints && settings.calibrationPoints.length === 4;
+  const calibrationLabels = ['20 (oben)', '6 (rechts)', '3 (unten)', '11 (links)'];
 
   return (
     <View style={styles.container} onLayout={onLayout}>
-      <CameraView
-        ref={cameraRef}
-        style={styles.camera}
-        facing="back"
-        zoom={clamp(settings.zoom, 0, 1)}
-        pictureSize={settings.pictureSize}
-        onCameraReady={handleCameraReady}
-      />
-      <Pressable style={styles.touchLayer} onPress={onTouch}>
-        <View style={[styles.crosshair, { left: crossLeft, top: crossTop }]} />
-        <Text style={styles.hint}>
-          {setupMode
-            ? 'Setup: Tippe, um Board-Mitte zu setzen'
-            : 'Tippe auf das Board, um einen Treffer zu simulieren'}
-        </Text>
-      </Pressable>
+      <PinchGestureHandler onGestureEvent={onPinchEvent} onHandlerStateChange={onPinchStateChange}>
+        <View>
+          <CameraView
+            ref={cameraRef}
+            style={styles.camera}
+            facing="back"
+            zoom={clamp(liveZoom, 0, 1)}
+            pictureSize={settings.pictureSize}
+            onCameraReady={handleCameraReady}
+          />
+          <Pressable style={styles.touchLayer} onPress={onTouch}>
+            {setupMode && (
+              <View pointerEvents="none" style={styles.overlay}>
+                <View
+                  style={[
+                    styles.boardOutline,
+                    { left: boardLeft, top: boardTop, width: boardRadius * 2, height: boardRadius * 2 },
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.boardLine,
+                    {
+                      left: layout.width * settings.centerX - 1,
+                      top: layout.height * settings.centerY - boardRadius,
+                      height: boardRadius,
+                      transform: [{ rotateZ: `${settings.rotationDeg}deg` }],
+                    },
+                  ]}
+                />
+                {hasCalibration && calibrationStep === null &&
+                  settings.calibrationPoints?.map((pt, index) => (
+                    <View
+                      key={`calib-${index}`}
+                      style={[
+                        styles.calibrationPoint,
+                        {
+                          left: pt.x * layout.width - 6,
+                          top: pt.y * layout.height - 6,
+                        },
+                      ]}
+                    />
+                  ))}
+                {calibrationDraft.map((pt, index) => (
+                  <View
+                    key={`draft-${index}`}
+                    style={[
+                      styles.calibrationPointDraft,
+                      {
+                        left: pt.x * layout.width - 6,
+                        top: pt.y * layout.height - 6,
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
+            <View style={[styles.crosshair, { left: crossLeft, top: crossTop }]} />
+            <Text style={styles.hint}>
+              {calibrationStep !== null
+                ? `Kalibrierung: Tippe ${calibrationLabels[calibrationStep]}`
+                : setupMode
+                  ? 'Setup: Tippe, um Board-Mitte zu setzen'
+                  : 'Tippe auf das Board, um einen Treffer zu simulieren'}
+            </Text>
+          </Pressable>
+        </View>
+      </PinchGestureHandler>
       <View style={styles.panel}>
         <View style={styles.row}>
           <Text style={styles.panelTitle}>Kamera Setup</Text>
@@ -158,17 +298,49 @@ export const CameraScoringView = ({ onDetect }: Props) => {
             <Text style={styles.toggleText}>{setupMode ? 'Fertig' : 'Anpassen'}</Text>
           </Pressable>
         </View>
-        <Text style={styles.meta}>Aufloesung: {settings.pictureSize ?? 'auto'}</Text>
+        <View style={styles.row}>
+          <Text style={styles.meta}>Aufloesung: {settings.pictureSize ?? 'auto'}</Text>
+          <Pressable style={styles.refresh} onPress={handleCameraReady}>
+            <Text style={styles.refreshText}>Neu</Text>
+          </Pressable>
+        </View>
         <Text style={styles.label}>Zoom</Text>
         <Slider
-          value={settings.zoom}
-          onValueChange={(value) => update({ zoom: Number(value.toFixed(2)) })}
+          value={liveZoom}
+          onValueChange={(value) => setLiveZoom(Number(value.toFixed(2)))}
+          onSlidingComplete={(value) => update({ zoom: Number(value.toFixed(2)) })}
           minimumValue={0}
           maximumValue={1}
           step={0.01}
           minimumTrackTintColor="#111827"
           maximumTrackTintColor="#d1d5db"
         />
+        <View style={styles.adjustRow}>
+          <Text style={styles.label}>Zoom Fein</Text>
+          <View style={styles.controls}>
+            <Pressable
+              style={styles.controlButton}
+              onPress={() => {
+                const next = clamp(liveZoom - 0.02, 0, 1);
+                setLiveZoom(next);
+                void update({ zoom: next });
+              }}
+            >
+              <Text>-</Text>
+            </Pressable>
+            <Text>{liveZoom.toFixed(2)}</Text>
+            <Pressable
+              style={styles.controlButton}
+              onPress={() => {
+                const next = clamp(liveZoom + 0.02, 0, 1);
+                setLiveZoom(next);
+                void update({ zoom: next });
+              }}
+            >
+              <Text>+</Text>
+            </Pressable>
+          </View>
+        </View>
         <View style={styles.adjustRow}>
           <Text style={styles.label}>Skalierung</Text>
           <View style={styles.controls}>
@@ -199,6 +371,30 @@ export const CameraScoringView = ({ onDetect }: Props) => {
             </Pressable>
           </View>
         </View>
+        <View style={styles.adjustRow}>
+          <Text style={styles.label}>4-Punkt Kalibrierung</Text>
+          <View style={styles.controls}>
+            <Pressable
+              style={styles.controlButton}
+              onPress={() => {
+                setCalibrationDraft([]);
+                setCalibrationStep(0);
+              }}
+            >
+              <Text>{hasCalibration ? 'Neu' : 'Start'}</Text>
+            </Pressable>
+            {calibrationStep !== null && (
+              <Pressable style={styles.controlButton} onPress={() => setCalibrationStep(null)}>
+                <Text>Abbruch</Text>
+              </Pressable>
+            )}
+            {hasCalibration && calibrationStep === null && (
+              <Pressable style={styles.controlButton} onPress={() => update({ calibrationPoints: undefined })}>
+                <Text>Loeschen</Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
         <Pressable style={styles.reset} onPress={reset}>
           <Text style={styles.resetText}>Reset</Text>
         </Pressable>
@@ -221,6 +417,34 @@ const styles = StyleSheet.create({
   },
   touchLayer: {
     ...StyleSheet.absoluteFillObject,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  boardOutline: {
+    position: 'absolute',
+    borderColor: 'rgba(255,255,255,0.7)',
+    borderWidth: 2,
+    borderRadius: 999,
+  },
+  boardLine: {
+    position: 'absolute',
+    width: 2,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+  },
+  calibrationPoint: {
+    position: 'absolute',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(16,185,129,0.9)',
+  },
+  calibrationPointDraft: {
+    position: 'absolute',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(59,130,246,0.9)',
   },
   crosshair: {
     position: 'absolute',
@@ -269,6 +493,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
     marginTop: 4,
+  },
+  refresh: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#e5e7eb',
+  },
+  refreshText: {
+    fontSize: 12,
+    color: '#111827',
   },
   label: {
     marginTop: 10,

@@ -24,6 +24,7 @@ Baue einen robusten Kamera-Setup- und Kalibrierungsmodus aus, damit das Board fu
    - Groesste Pixelanzahl waehlen und speichern.
 3. Kalibrierung:
    - Mittelpunkt per Tap setzen (Bull-Mitte).
+   - Optional: 4-Punkt-Kalibrierung fuer perspektivische Korrektur.
    - Skalierung so, dass Board-Rand exakt passt.
    - Rotation so ausrichten, dass 20 oben stimmt.
 4. Overlay fuer Setup:

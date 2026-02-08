@@ -95,6 +95,8 @@ Anforderungen:
 - Autoscoring läuft lokal und offline
 - Manuelle Korrektur pro Wurf möglich
 - Erkennung mehrerer Treffer pro Visit
+- Kalibrierung per Board-Mitte und optionaler 4-Punkt-Kalibrierung
+- Zoom via Slider und Pinch-Geste
 
 Edge Cases:
 - Okklusion durch Hand oder Dartkörper

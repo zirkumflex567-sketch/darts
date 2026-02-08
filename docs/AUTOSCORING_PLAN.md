@@ -47,6 +47,11 @@ Echte, live Kamera-basierte Erkennung von Darttreffern und automatischer Score-B
 - Nutzer bestaetigt Board-Center oder korrigiert mit 4 Punkten.
 - Daraus Homographie berechnen -> jeder Pixel wird auf Board-Koordinaten gemappt.
 
+## Kalibrierung (aktuell implementiert)
+- Setup-Modus mit Board-Mitte, Skalierung und Rotation.
+- 4-Punkt-Kalibrierung (20/6/3/11 Double-Ring) fuer perspektivische Korrektur.
+- Speicherung der Kalibrierpunkte im lokalen Settings-Store.
+
 ## Segment Mapping
 - Standard Board-Ringe und Winkel-Offsets.
 - Radiale Zonen: Bull, Single, Triple, Single, Double.

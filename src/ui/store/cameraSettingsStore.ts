@@ -8,6 +8,7 @@ export interface CameraSettings {
   scale: number; // radius scale
   zoom: number; // 0..1
   pictureSize?: string;
+  calibrationPoints?: { x: number; y: number }[]; // 4-point calibration (normalized)
 }
 
 interface CameraSettingsState {
