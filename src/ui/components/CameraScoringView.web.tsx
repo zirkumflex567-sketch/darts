@@ -547,6 +547,12 @@ export const CameraScoringView = ({ onDetect }: Props) => {
           </View>
           {detectStatus && <Text style={styles.meta}>{detectStatus}</Text>}
         </View>
+        <View style={styles.adjustRow}>
+          <Text style={styles.label}>ML Autoscoring</Text>
+          <Text style={styles.meta}>
+            Im Web nicht verfuegbar. Native App mit Dev-Client erforderlich.
+          </Text>
+        </View>
         <Pressable style={styles.reset} onPress={reset}>
           <Text style={styles.resetText}>Reset</Text>
         </Pressable>

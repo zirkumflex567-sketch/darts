@@ -6,6 +6,7 @@ import { runOnJS, useSharedValue } from 'react-native-reanimated';
 import { createResizePlugin } from 'vision-camera-resize-plugin';
 import Slider from '@react-native-community/slider';
 import * as FileSystem from 'expo-file-system';
+import { useTensorflowModel } from 'react-native-fast-tflite';
 import { ScoringHit } from '../../domain/scoring/types';
 import { clamp } from '../../shared/utils';
 import { useCameraSettingsStore } from '../store/cameraSettingsStore';
@@ -110,6 +111,8 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   const [liveZoom, setLiveZoom] = useState(0);
   const [detectStatus, setDetectStatus] = useState<string | null>(null);
   const [autoScan, setAutoScan] = useState(false);
+  const [mlEnabled, setMlEnabled] = useState(false);
+  const [mlConfidence, setMlConfidence] = useState(0.45);
   const [datasetCount, setDatasetCount] = useState(0);
   const [datasetStatus, setDatasetStatus] = useState<string | null>(null);
   const [pendingSample, setPendingSample] = useState<DatasetSample | null>(null);
@@ -119,6 +122,12 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   const pinchStartZoom = useRef(0);
 
   const { settings, load, update, reset } = useCameraSettingsStore();
+
+  const mlInputSize = 320;
+  const modelUrl = `${FileSystem.documentDirectory ?? ''}models/dart_tip.tflite`;
+  const tflite = useTensorflowModel({ url: modelUrl });
+  const mlModel = tflite.state === 'loaded' ? tflite.model : undefined;
+  const mlReady = tflite.state === 'loaded';
 
   const autoScanValue = useSharedValue(0);
   const baselineRequest = useSharedValue(0);
@@ -351,6 +360,90 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   const frameProcessor = useFrameProcessor(
     (frame) => {
       'worklet';
+      // persistent state inside worklet runtime
+      // eslint-disable-next-line no-undef
+      const state = global.__dartsmindRealtimeState || {
+        baselineBuffer: null,
+        lastBaselineRequest: 0,
+        lastHitTs: 0,
+      };
+      // eslint-disable-next-line no-undef
+      global.__dartsmindRealtimeState = state;
+
+      if (autoScanValue.value !== 1) return;
+
+      const now = Date.now();
+      if (state.lastHitTs && now - state.lastHitTs < 1400) {
+        return;
+      }
+
+      if (mlEnabled && mlModel) {
+        const resized = resize(frame, {
+          width: mlInputSize,
+          height: mlInputSize,
+          pixelFormat: 'rgb',
+          dataType: 'float32',
+        });
+        if (!resized) return;
+
+        for (let i = 0; i < resized.length; i++) {
+          resized[i] = resized[i] / 255;
+        }
+
+        const outputs = mlModel.runSync([resized]);
+        if (!outputs || outputs.length === 0) return;
+        const output = outputs[0];
+
+        const decode = (arr, inputSize, threshold) => {
+          'worklet';
+          let bestConf = 0;
+          let bestX = 0;
+          let bestY = 0;
+          const len = arr.length;
+          if (len % 6 === 0) {
+            for (let i = 0; i < len; i += 6) {
+              const conf = arr[i + 4];
+              if (conf > bestConf) {
+                bestConf = conf;
+                bestX = arr[i];
+                bestY = arr[i + 1];
+              }
+            }
+          } else if (len % 84 === 0) {
+            const stride = len / 84;
+            for (let i = 0; i < stride; i++) {
+              const x = arr[i];
+              const y = arr[i + stride];
+              let cls = 0;
+              for (let c = 4; c < 84; c++) {
+                const score = arr[i + c * stride];
+                if (score > cls) cls = score;
+              }
+              if (cls > bestConf) {
+                bestConf = cls;
+                bestX = x;
+                bestY = y;
+              }
+            }
+          }
+          if (bestConf < threshold) return null;
+          let nx = bestX;
+          let ny = bestY;
+          if (nx > 1 || ny > 1) {
+            nx = nx / inputSize;
+            ny = ny / inputSize;
+          }
+          if (nx < 0 || ny < 0 || nx > 1 || ny > 1) return null;
+          return { nx, ny, conf: bestConf };
+        };
+
+        const detection = decode(output, mlInputSize, mlConfidence);
+        if (!detection) return;
+        runOnJS(reportDetection)(detection.nx, detection.ny);
+        state.lastHitTs = now;
+        return;
+      }
+
       const width = 96;
       const height = 96;
       const resized = resize(frame, {
@@ -362,16 +455,6 @@ export const CameraScoringView = ({ onDetect }: Props) => {
 
       if (!resized) return;
 
-      // persistent state inside worklet runtime
-      // eslint-disable-next-line no-undef
-      const state = global.__dartsmindRealtimeState || {
-        baselineBuffer: null,
-        lastBaselineRequest: 0,
-        lastHitTs: 0,
-      };
-      // eslint-disable-next-line no-undef
-      global.__dartsmindRealtimeState = state;
-
       if (baselineRequest.value !== state.lastBaselineRequest) {
         state.baselineBuffer = resized;
         state.lastBaselineRequest = baselineRequest.value;
@@ -379,16 +462,9 @@ export const CameraScoringView = ({ onDetect }: Props) => {
         return;
       }
 
-      if (autoScanValue.value !== 1) return;
-
       if (!state.baselineBuffer) {
         state.baselineBuffer = resized;
         runOnJS(reportBaseline)(true);
-        return;
-      }
-
-      const now = Date.now();
-      if (state.lastHitTs && now - state.lastHitTs < 1400) {
         return;
       }
 
@@ -430,7 +506,19 @@ export const CameraScoringView = ({ onDetect }: Props) => {
       state.baselineBuffer = resized;
       state.lastHitTs = now;
     },
-    [autoScanValue, baselineRequest, centerXValue, centerYValue, reportBaseline, reportDetection, scaleValue]
+    [
+      autoScanValue,
+      baselineRequest,
+      centerXValue,
+      centerYValue,
+      reportBaseline,
+      reportDetection,
+      scaleValue,
+      mlEnabled,
+      mlModel,
+      mlInputSize,
+      mlConfidence,
+    ]
   );
 
   if (!hasPermission) {
@@ -494,7 +582,7 @@ export const CameraScoringView = ({ onDetect }: Props) => {
             zoom={zoomValue}
             format={format}
             frameProcessor={frameProcessor}
-            frameProcessorFps={6}
+            frameProcessorFps={mlEnabled ? 4 : 6}
           />
           <Pressable style={styles.touchLayer} onPress={onTouch}>
             {setupMode && (
@@ -680,6 +768,48 @@ export const CameraScoringView = ({ onDetect }: Props) => {
             </Pressable>
           </View>
           {detectStatus && <Text style={styles.meta}>{detectStatus}</Text>}
+        </View>
+        <View style={styles.adjustRow}>
+          <Text style={styles.label}>ML Autoscoring (YOLO)</Text>
+          <Text style={styles.meta}>
+            Modell: {mlReady ? 'bereit' : tflite.state === 'error' ? 'fehlt' : tflite.state}
+          </Text>
+          <View style={styles.controls}>
+            <Pressable
+              style={styles.controlButton}
+              onPress={() => {
+                if (!mlReady) {
+                  setDetectStatus('ML Modell fehlt (siehe Pfad unten).');
+                  return;
+                }
+                const next = !mlEnabled;
+                setMlEnabled(next);
+                if (next && !autoScan) setAutoScan(true);
+                setDetectStatus(next ? 'ML aktiv' : 'ML aus');
+              }}
+            >
+              <Text>{mlEnabled ? 'ML Stop' : 'ML Start'}</Text>
+            </Pressable>
+          </View>
+          <View style={styles.adjustRow}>
+            <Text style={styles.label}>ML Confidence</Text>
+            <View style={styles.controls}>
+              <Pressable
+                style={styles.controlButton}
+                onPress={() => setMlConfidence((prev) => Math.max(0.1, Number((prev - 0.05).toFixed(2))))}
+              >
+                <Text>-</Text>
+              </Pressable>
+              <Text>{mlConfidence.toFixed(2)}</Text>
+              <Pressable
+                style={styles.controlButton}
+                onPress={() => setMlConfidence((prev) => Math.min(0.9, Number((prev + 0.05).toFixed(2))))}
+              >
+                <Text>+</Text>
+              </Pressable>
+            </View>
+          </View>
+          <Text style={styles.meta}>Model Pfad: {modelUrl}</Text>
         </View>
         <View style={styles.adjustRow}>
           <Text style={styles.label}>Dataset Capture</Text>

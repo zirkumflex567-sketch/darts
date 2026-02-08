@@ -42,3 +42,11 @@ yarn-error.*
 
 # Expo logs
 expo.log
+
+# Python/ML artifacts
+.venv/
+ml/dataset/
+ml/external/
+runs/
+*.pt
+*.tflite
