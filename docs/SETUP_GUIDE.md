@@ -55,6 +55,11 @@ Hinweis: Bei starkem Lichtwechsel oder Bewegung kann die Erkennung fehlschlagen.
 - Nutzt VisionCamera Frame Processor, laeuft kontinuierlich im Hintergrund.
 - Beste Ergebnisse mit stabiler Kamera und 4-Punkt-Kalibrierung.
 
+### Dataset Capture
+- `Capture` erstellt ein Foto fuer Trainingsdaten.
+- Im Dialog die Dartspitze antippen und `Speichern`.
+- Samples landen in `FileSystem.documentDirectory/dataset`.
+
 ## Fehlerdiagnose
 - Treffer liegt daneben -> Board-Mitte und Rotation pruefen.
 - Treffer grob falsch -> 4-Punkt-Kalibrierung wiederholen.

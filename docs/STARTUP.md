@@ -24,6 +24,7 @@ npm run dev:tunnel
 eas login
 eas build -p android --profile development
 ```
+Hinweis: Neue native Module (VisionCamera/Expo FileSystem) erfordern einen frischen Dev Client Build.
 
 ### Run
 ```bash

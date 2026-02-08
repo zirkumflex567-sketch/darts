@@ -1,14 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-native';
+import { View, Text, StyleSheet, Pressable, LayoutChangeEvent, Modal, Image } from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission, useFrameProcessor } from 'react-native-vision-camera';
 import { PinchGestureHandler, State } from 'react-native-gesture-handler';
 import { runOnJS, useSharedValue } from 'react-native-reanimated';
 import { createResizePlugin } from 'vision-camera-resize-plugin';
 import Slider from '@react-native-community/slider';
+import * as FileSystem from 'expo-file-system';
 import { ScoringHit } from '../../domain/scoring/types';
 import { clamp } from '../../shared/utils';
 import { useCameraSettingsStore } from '../store/cameraSettingsStore';
 import { applyHomography, computeHomography, Point } from '../utils/homography';
+import {
+  appendDatasetSample,
+  ensureDatasetDir,
+  getDatasetDir,
+  loadDatasetIndex,
+  DatasetSample,
+  removeDatasetSample,
+} from '../utils/datasetStorage';
 
 const BOARD_NUMBERS = [
   20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5,
@@ -101,6 +110,12 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   const [liveZoom, setLiveZoom] = useState(0);
   const [detectStatus, setDetectStatus] = useState<string | null>(null);
   const [autoScan, setAutoScan] = useState(false);
+  const [datasetCount, setDatasetCount] = useState(0);
+  const [datasetStatus, setDatasetStatus] = useState<string | null>(null);
+  const [pendingSample, setPendingSample] = useState<DatasetSample | null>(null);
+  const [annotationPoint, setAnnotationPoint] = useState<Point | null>(null);
+  const [annotationLayout, setAnnotationLayout] = useState({ width: 0, height: 0 });
+  const cameraRef = useRef<Camera>(null);
   const pinchStartZoom = useRef(0);
 
   const { settings, load, update, reset } = useCameraSettingsStore();
@@ -114,6 +129,17 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    let mounted = true;
+    void loadDatasetIndex().then((items) => {
+      if (!mounted) return;
+      setDatasetCount(items.length);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!hasPermission) return;
@@ -210,6 +236,100 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     },
     [liveZoom, update]
   );
+
+  const captureDatasetSample = useCallback(async () => {
+    if (!cameraRef.current) return;
+    setDatasetStatus('Capture laeuft...');
+    try {
+      await ensureDatasetDir();
+      const photo = await cameraRef.current.takePhoto({
+        flash: 'off',
+        enableAutoStabilization: true,
+        qualityPrioritization: 'quality',
+      });
+      const sourcePath = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
+      const id = `${Date.now()}`;
+      const fileName = `sample_${id}.jpg`;
+      const destination = `${getDatasetDir()}${fileName}`;
+      await FileSystem.copyAsync({ from: sourcePath, to: destination });
+
+      const sample: DatasetSample = {
+        id,
+        fileName,
+        uri: destination,
+        width: photo.width ?? 0,
+        height: photo.height ?? 0,
+        capturedAt: new Date().toISOString(),
+        settingsSnapshot: {
+          centerX: settings.centerX,
+          centerY: settings.centerY,
+          scale: settings.scale,
+          rotationDeg: settings.rotationDeg,
+          calibrationPoints: settings.calibrationPoints,
+        },
+      };
+      setPendingSample(sample);
+      setAnnotationPoint(null);
+      setDatasetStatus('Tap zum markieren der Dartspitze');
+    } catch {
+      setDatasetStatus('Capture fehlgeschlagen');
+    }
+  }, [settings]);
+
+  const onAnnotationLayout = (event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setAnnotationLayout({ width, height });
+  };
+
+  const onAnnotationTap = (event: any) => {
+    if (!pendingSample) return;
+    const { locationX, locationY } = event.nativeEvent;
+    const { width: containerW, height: containerH } = annotationLayout;
+    const imageW = pendingSample.width || containerW;
+    const imageH = pendingSample.height || containerH;
+    if (containerW === 0 || containerH === 0) return;
+    const scale = Math.min(containerW / imageW, containerH / imageH);
+    const displayW = imageW * scale;
+    const displayH = imageH * scale;
+    const offsetX = (containerW - displayW) / 2;
+    const offsetY = (containerH - displayH) / 2;
+    const nx = (locationX - offsetX) / displayW;
+    const ny = (locationY - offsetY) / displayH;
+    if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return;
+    setAnnotationPoint({ x: nx, y: ny });
+  };
+
+  const saveAnnotation = useCallback(async () => {
+    if (!pendingSample) return;
+    if (!annotationPoint) {
+      setDatasetStatus('Bitte Dartspitze markieren');
+      return;
+    }
+    const sample: DatasetSample = {
+      ...pendingSample,
+      annotation: { x: annotationPoint.x, y: annotationPoint.y },
+    };
+    const count = await appendDatasetSample(sample);
+    setDatasetCount(count);
+    setPendingSample(null);
+    setAnnotationPoint(null);
+    setDatasetStatus(`Gespeichert (${count})`);
+  }, [annotationPoint, pendingSample]);
+
+  const discardAnnotation = useCallback(async () => {
+    if (!pendingSample) return;
+    try {
+      await FileSystem.deleteAsync(pendingSample.uri, { idempotent: true });
+      const count = await removeDatasetSample(pendingSample.id);
+      setDatasetCount(count);
+    } catch {
+      // ignore
+    } finally {
+      setPendingSample(null);
+      setAnnotationPoint(null);
+      setDatasetStatus('Verworfen');
+    }
+  }, [pendingSample]);
 
   const reportBaseline = useCallback((ok: boolean) => {
     setDetectStatus(ok ? 'Baseline gespeichert' : 'Baseline fehlgeschlagen');
@@ -344,11 +464,30 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   const hasCalibration = settings.calibrationPoints && settings.calibrationPoints.length === 4;
   const calibrationLabels = ['20 (oben)', '6 (rechts)', '3 (unten)', '11 (links)'];
 
+  const markerPosition = useMemo(() => {
+    if (!pendingSample || !annotationPoint) return null;
+    const containerW = annotationLayout.width;
+    const containerH = annotationLayout.height;
+    const imageW = pendingSample.width || containerW;
+    const imageH = pendingSample.height || containerH;
+    if (containerW === 0 || containerH === 0) return null;
+    const scale = Math.min(containerW / imageW, containerH / imageH);
+    const displayW = imageW * scale;
+    const displayH = imageH * scale;
+    const offsetX = (containerW - displayW) / 2;
+    const offsetY = (containerH - displayH) / 2;
+    return {
+      left: offsetX + annotationPoint.x * displayW - 6,
+      top: offsetY + annotationPoint.y * displayH - 6,
+    };
+  }, [annotationLayout.height, annotationLayout.width, annotationPoint, pendingSample]);
+
   return (
     <View style={styles.container} onLayout={onLayout}>
       <PinchGestureHandler onGestureEvent={onPinchEvent} onHandlerStateChange={onPinchStateChange}>
         <View>
           <Camera
+            ref={cameraRef}
             style={styles.camera}
             device={device}
             isActive
@@ -542,10 +681,52 @@ export const CameraScoringView = ({ onDetect }: Props) => {
           </View>
           {detectStatus && <Text style={styles.meta}>{detectStatus}</Text>}
         </View>
+        <View style={styles.adjustRow}>
+          <Text style={styles.label}>Dataset Capture</Text>
+          <Text style={styles.meta}>Aktuell gespeichert: {datasetCount}</Text>
+          <View style={styles.controls}>
+            <Pressable style={styles.controlButton} onPress={captureDatasetSample}>
+              <Text>Capture</Text>
+            </Pressable>
+            <Text style={styles.meta}>{datasetStatus ?? ''}</Text>
+          </View>
+        </View>
         <Pressable style={styles.reset} onPress={reset}>
           <Text style={styles.resetText}>Reset</Text>
         </Pressable>
       </View>
+      <Modal visible={!!pendingSample} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.panelTitle}>Annotation</Text>
+            <Text style={styles.meta}>Tippe die Dartspitze im Bild an.</Text>
+            <Pressable style={styles.annotationCanvas} onPress={onAnnotationTap} onLayout={onAnnotationLayout}>
+              {pendingSample && (
+                <Image source={{ uri: pendingSample.uri }} style={styles.annotationImage} resizeMode="contain" />
+              )}
+              {markerPosition && (
+                <View
+                  style={[
+                    styles.annotationMarker,
+                    {
+                      left: markerPosition.left,
+                      top: markerPosition.top,
+                    },
+                  ]}
+                />
+              )}
+            </Pressable>
+            <View style={styles.controls}>
+              <Pressable style={styles.controlButton} onPress={discardAnnotation}>
+                <Text>Verwerfen</Text>
+              </Pressable>
+              <Pressable style={styles.controlButton} onPress={saveAnnotation}>
+                <Text>Speichern</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -689,5 +870,37 @@ const styles = StyleSheet.create({
   permissionButtonText: {
     color: '#ffffff',
     textAlign: 'center',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+  },
+  annotationCanvas: {
+    marginTop: 12,
+    width: '100%',
+    height: 320,
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  annotationImage: {
+    width: '100%',
+    height: '100%',
+  },
+  annotationMarker: {
+    position: 'absolute',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(239,68,68,0.9)',
+    borderWidth: 2,
+    borderColor: '#ffffff',
   },
 });

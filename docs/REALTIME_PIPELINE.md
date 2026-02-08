@@ -37,4 +37,4 @@ Echte, kontinuierliche Treffer-Erkennung in Live-Frames auf dem Device, ohne Clo
 - Datenerfassung direkt aus der App.
 - Training YOLOv8n oder MobileNet SSD.
 - TFLite/CoreML Inference im Frame Processor.
-
+Siehe auch: `docs/DATASET_CAPTURE.md` und `ml/README.md`.

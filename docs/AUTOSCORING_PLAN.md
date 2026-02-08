@@ -128,6 +128,7 @@ Echte, live Kamera-basierte Erkennung von Darttreffern und automatischer Score-B
 - Hinweis: PoC ist experimentell und braucht ruhige Hand und gutes Licht.
 - Auto-Scan (quasi live): Wiederholter Scan im festen Intervall, Baseline wird nach Treffern aktualisiert.
 - Realtime Pipeline (native): VisionCamera Frame Processor + Downscale + Diff-Analyse (siehe `docs/REALTIME_PIPELINE.md`).
+- Dataset Capture: In-App Capture + Annotation, Export via `docs/DATASET_CAPTURE.md`.
 
 ## Custom Dev Client erforderlich
 - Kamera + ML Module laufen nicht in Expo Go.

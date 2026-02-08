@@ -100,6 +100,7 @@ Anforderungen:
 - PoC-Modus: Baseline/Scan (Frame-Differenz) fuer erste Treffer
 - Auto-Scan Modus fuer quasi-live Erkennung (Intervall-Scan)
 - Realtime Pipeline (native) ueber VisionCamera Frame Processor
+- Dataset Capture + Annotation fuer ML-Training (siehe `docs/DATASET_CAPTURE.md`)
 
 Edge Cases:
 - Okklusion durch Hand oder Dartkörper

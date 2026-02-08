@@ -17,6 +17,7 @@ Baue eine klare Pipeline fuer Datenerfassung, Annotation und Modelltraining fuer
 ## Umsetzungsschritte
 1. Datenerfassung in App:
    - Debug-Mode, der Frames speichert (PNG/JPEG) + Metadata.
+   - Annotation in der App (Dartspitze tippen).
    - Ordnerstruktur pro Session.
 2. Annotation:
    - Export in COCO/YOLO.
