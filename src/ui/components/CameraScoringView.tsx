@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-native';
 import { CameraView, CameraViewRef, useCameraPermissions } from 'expo-camera';
 import Slider from '@react-native-community/slider';
@@ -78,10 +78,11 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     setLayout({ width, height });
   };
 
-  const selectBestPictureSize = async () => {
+  const selectBestPictureSize = useCallback(async () => {
     try {
       if (!cameraRef.current) return;
-      const sizes = await cameraRef.current.getAvailablePictureSizes();
+      if (settings.pictureSize) return;
+      const sizes = await cameraRef.current.getAvailablePictureSizesAsync();
       if (!sizes || sizes.length === 0) return;
       const parsed = sizes
         .map((size) => {
@@ -93,13 +94,17 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     } catch {
       // ignore
     }
-  };
+  }, [settings.pictureSize, update]);
+
+  const handleCameraReady = useCallback(() => {
+    void selectBestPictureSize();
+  }, [selectBestPictureSize]);
 
   useEffect(() => {
     if (permission?.granted) {
-      selectBestPictureSize();
+      void selectBestPictureSize();
     }
-  }, [permission?.granted]);
+  }, [permission?.granted, selectBestPictureSize]);
 
   const onTouch = (event: any) => {
     if (!ready) return;
@@ -136,6 +141,7 @@ export const CameraScoringView = ({ onDetect }: Props) => {
         facing="back"
         zoom={clamp(settings.zoom, 0, 1)}
         pictureSize={settings.pictureSize}
+        onCameraReady={handleCameraReady}
       />
       <Pressable style={styles.touchLayer} onPress={onTouch}>
         <View style={[styles.crosshair, { left: crossLeft, top: crossTop }]} />

@@ -18,6 +18,10 @@ Diese Prompt-Sammlung führt Codex Schritt für Schritt zu einer lauffähigen MV
 10. `10-online-lobby-mock.md`
 11. `11-monetization-gates.md`
 12. `12-qa-release.md`
+13. `13-camera-setup-calibration.md`
+14. `14-autoscoring-heuristic-poc.md`
+15. `15-ml-dataset-training.md`
+16. `16-native-inference-bridge.md`
 
 ## Festgelegter Stack
 - React Native (Expo)

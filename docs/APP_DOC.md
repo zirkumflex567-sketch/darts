@@ -1,13 +1,25 @@
 # Dartsmind Doku (Produkt, Features, Prompting)
 
-Stand: 2026-02-07
-Quelle der Faktenbasis: `/root/darts/info.md` (Zusammenfassung, ohne externe Verifikation)
+Stand: 2026-02-08
+Quelle der Faktenbasis: `/root/darts/info.md` plus oeffentliche Quellen (dartsmind.com, App Store Listing, Reddit Thread)
 
 ## Zweck dieser Doku
 Diese Doku beschreibt die App, die einzelnen Funktionen und das gewünschte Verhalten so klar, dass wir daraus zielgerichtete Codex-Prompts entwickeln und Umsetzungen beauftragen können.
 
 ## Überblick
-Dartsmind ist eine mobile App, die ein Smartphone oder Tablet in ein automatisches Dart-Scoring-System verwandelt. Die App nutzt die Rückkamera des Geräts zur Erkennung von Dartwürfen und zählt Punkte automatisch, ohne zusätzliche Hardware. Sie läuft lokal auf dem Gerät, unterstützt Online-Spiele und bietet zahlreiche Spielmodi.
+Dartsmind ist eine mobile App, die ein Smartphone oder Tablet in ein automatisches Dart-Scoring-System verwandelt. Die App nutzt die Rueckkamera des Geraets zur Erkennung von Dartwuerfen und zaehlt Punkte automatisch, ohne zusaetzliche Hardware. Sie laeuft lokal auf dem Geraet, unterstuetzt Online-Spiele und bietet zahlreiche Spielmodi.
+
+## Oeffentliche Feature-Referenz (Dartsmind)
+Aus oeffentlich verfuegbaren Quellen ergibt sich folgendes Ziel-Set, das wir funktional moeglichst spiegeln wollen:
+- Autoscoring mit On-Device-KI (keine Zusatzhardware)
+- Funktioniert aus verschiedenen Hoehen/Winkeln (Single-Device)
+- Optionaler Dual-Device-Modus fuer hoehere Genauigkeit
+- Mehrere Spieler (inkl. bis zu 6 Spielern im lokalen Match)
+- Spielmodi: X01, Cricket, Trainings- und Party-Modi
+- Detaillierte Statistiken und Historie
+- Statistiken werden gespeichert und koennen spaeter abgerufen werden
+- Online-Matches mit optionalem Video
+- Schnelle, flexible Spiel- und Regel-Settings (z.B. schnelle Start- und Regelanpassung)
 
 ## Zielgruppe
 - Hobby- und Vereinsspieler, die schnell Punkte erfassen möchten
@@ -28,7 +40,8 @@ Dartsmind ist eine mobile App, die ein Smartphone oder Tablet in ein automatisch
 ## Plattformen und Mindestvoraussetzungen
 - iOS/iPadOS mit A12-Chip oder neuer
 - Android 9.0+ mit ausreichender CPU/GPU-Leistung
-- Dual-Device-Modus optional für höhere Präzision
+- Zielgeraet fuer Entwicklung/Tests: Poco X6 (Android)
+- Dual-Device-Modus optional fuer hoehere Praezision
 
 ## Terminologie
 - Throw: einzelner Dartwurf
@@ -38,13 +51,23 @@ Dartsmind ist eine mobile App, die ein Smartphone oder Tablet in ein automatisch
 - Checkout: letzter Wurf zum Beenden eines X01-Spiels
 
 ## Feature-Übersicht
-- Autoscoring per Kamera
-- KI-gestützte Erkennung on-device
+- Autoscoring per Kamera (on-device)
+- KI-gestuetzte Erkennung on-device
 - Spielmodi: X01, Cricket, Training, Party
 - DartBot (KI-Gegner)
 - Statistiken und Historie
 - Online-Spiel mit Lobby und Video
 - Monetarisierung via Abo und Coins
+- Flexible Spiel-Settings (z.B. Spieleranzahl, Regeln)
+
+## Setup-Referenz (H-Town, Poco X6)
+Bildbasis: `docs/IMG_20260208_014519.jpg`.
+Ziel ist eine feste Kamera-Position dort, wo im Bild das Handy sichtbar ist. Anforderungen:
+- Kamera stabil montiert (z.B. Wandhalterung/Tripod) und nicht wackeln.
+- Ausrichtung: Board moeglichst mittig im Bild, Kamera leicht seitlich versetzt ist ok.
+- Abstand so waehlen, dass das Board mind. 70% der Bildhoehe einnimmt.
+- Beleuchtung: Board gleichmaessig ausleuchten, Spiegelungen minimieren.
+In der App: Zoom nutzen, Board-Mitte setzen, Skalierung und Rotation feinjustieren.
 
 ## Funktionale Anforderungen im Detail
 

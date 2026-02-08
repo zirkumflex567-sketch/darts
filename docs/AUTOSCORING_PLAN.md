@@ -10,7 +10,7 @@ Echte, live Kamera-basierte Erkennung von Darttreffern und automatischer Score-B
 - Kein echtes Kamera- oder ML-Scoring implementiert.
 
 ## Offene Produkt-Entscheidungen (bitte festlegen)
-1. Zielgeraete: exakte Android- und iOS-Modelle
+1. Zielgeraete: exakte Android- und iOS-Modelle (primär: Poco X6)
 2. Montage: Abstand, Winkel, Fixierung (Tripod/Wall Mount)
 3. Board-Typen: Standard Steel / Soft / beides
 4. Genauigkeit: Ziel-Trefferquote (z.B. >=95%)
@@ -130,3 +130,15 @@ Echte, live Kamera-basierte Erkennung von Darttreffern und automatischer Score-B
 - Board-Mitte per Tap im Setup-Modus
 - Rotation und Skalierung anpassbar
 - Einstellungen werden lokal gespeichert
+
+## H-Town Setup (Poco X6)
+Referenz: `docs/IMG_20260208_014519.jpg`
+- Kamera-Position: exakt dort, wo das Handy im Bild steht.
+- Ziel: Board zentriert, Board-Rand moeglichst vollständig im Bild.
+- Zoom so einstellen, dass das Board den Frame bestmoeglich ausfuellt (mind. 70% Bildhoehe).
+- Nach dem Zoom: Board-Mitte setzen, Skalierung so, dass der Board-Rand zur Overlay-Kante passt, Rotation an die 20-Uhr-Ausrichtung anpassen.
+
+## Kamera-Aufloesung (Best Possible)
+- Beim App-Start die groesste verfuegbare Aufloesung via `getAvailablePictureSizesAsync` ermitteln.
+- `pictureSize` explizit setzen und in Settings speichern.
+- Falls kein Ergebnis: Fallback auf Default und Neustart der Auswahl anbieten.
