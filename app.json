@@ -45,7 +45,8 @@
           "cameraPermissionText": "Camera access is required for live dart scoring.",
           "microphonePermissionText": "Microphone access is optional."
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "extra": {
       "eas": {

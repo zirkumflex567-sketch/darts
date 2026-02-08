@@ -1,11 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, LayoutChangeEvent, Modal, Image } from 'react-native';
+import { View, Text, StyleSheet, Pressable, LayoutChangeEvent, Modal, Image, ScrollView } from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission, useFrameProcessor } from 'react-native-vision-camera';
 import { PinchGestureHandler, State } from 'react-native-gesture-handler';
 import { runOnJS, useSharedValue } from 'react-native-reanimated';
 import { createResizePlugin } from 'vision-camera-resize-plugin';
 import Slider from '@react-native-community/slider';
 import * as FileSystem from 'expo-file-system';
+import { Asset } from 'expo-asset';
+import { toByteArray } from 'base64-js';
+import { decode as decodeJpeg } from 'jpeg-js';
+import Svg, { Path, Circle } from 'react-native-svg';
 import { useTensorflowModel } from 'react-native-fast-tflite';
 import { ScoringHit } from '../../domain/scoring/types';
 import { clamp } from '../../shared/utils';
@@ -25,6 +29,10 @@ const BOARD_NUMBERS = [
 ];
 
 const { resize } = createResizePlugin();
+const DEFAULT_TEST_IMAGE = require('../../../assets/dartboard-default.jpg');
+const DEFAULT_TEST_IMAGE_INFO = Image.resolveAssetSource(DEFAULT_TEST_IMAGE);
+const SCALE_MIN = 0.2;
+const SCALE_MAX = 1.8;
 
 interface Props {
   onDetect: (hit: ScoringHit) => void;
@@ -104,8 +112,9 @@ const computeHit = (
 export const CameraScoringView = ({ onDetect }: Props) => {
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice('back');
-  const [layout, setLayout] = useState({ width: 0, height: 0 });
+  const [cameraLayout, setCameraLayout] = useState({ width: 0, height: 0 });
   const [setupMode, setSetupMode] = useState(false);
+  const [useSampleImage, setUseSampleImage] = useState(true);
   const [calibrationStep, setCalibrationStep] = useState<number | null>(null);
   const [calibrationDraft, setCalibrationDraft] = useState<Point[]>([]);
   const [liveZoom, setLiveZoom] = useState(0);
@@ -120,6 +129,13 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   const [annotationLayout, setAnnotationLayout] = useState({ width: 0, height: 0 });
   const [modelStatus, setModelStatus] = useState<string | null>(null);
   const [modelSourceUrl, setModelSourceUrl] = useState<string>('');
+  const [sampleStatus, setSampleStatus] = useState<string | null>(null);
+  const [sampleDetection, setSampleDetection] = useState<{ x: number; y: number; conf: number } | null>(null);
+  const [simStatus, setSimStatus] = useState<string | null>(null);
+  const [lastSimHit, setLastSimHit] = useState<ScoringHit | null>(null);
+  const [debugOverlay, setDebugOverlay] = useState(true);
+  const [debugNumbers, setDebugNumbers] = useState(true);
+  const [debugZones, setDebugZones] = useState(true);
   const cameraRef = useRef<Camera>(null);
   const pinchStartZoom = useRef(0);
 
@@ -134,12 +150,22 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   const tflite = useTensorflowModel({ url: modelSourceUrl });
   const mlModel = tflite.state === 'loaded' ? tflite.model : undefined;
   const mlReady = tflite.state === 'loaded';
+  const KP_MODEL_VERSION = '2026-02-08';
+  const kpModelFilename = `board_kp_${KP_MODEL_VERSION}.tflite`;
+  const kpModelUrl = `${modelDir}${kpModelFilename}`;
+  const KP_MODEL_REMOTE_URL = `https://h-town.duckdns.org/models/${kpModelFilename}`;
+  const [kpModelSourceUrl, setKpModelSourceUrl] = useState<string>('');
+  const [kpModelStatus, setKpModelStatus] = useState<string | null>(null);
+  const kpTflite = useTensorflowModel({ url: kpModelSourceUrl });
+  const kpModel = kpTflite.state === 'loaded' ? kpTflite.model : undefined;
 
   const autoScanValue = useSharedValue(0);
   const baselineRequest = useSharedValue(0);
   const centerXValue = useSharedValue(settings.centerX);
   const centerYValue = useSharedValue(settings.centerY);
   const scaleValue = useSharedValue(settings.scale);
+  const sampleImageWidth = DEFAULT_TEST_IMAGE_INFO?.width ?? 1;
+  const sampleImageHeight = DEFAULT_TEST_IMAGE_INFO?.height ?? 1;
 
   useEffect(() => {
     load();
@@ -182,6 +208,34 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     };
   }, [modelDir, modelUrl, MODEL_REMOTE_URL]);
 
+  const ensureKeypointModel = useCallback(async () => {
+    if (!FileSystem.documentDirectory) {
+      setKpModelStatus('Kein lokales Dateisystem verfügbar');
+      return false;
+    }
+    try {
+      await FileSystem.makeDirectoryAsync(modelDir, { intermediates: true });
+      const info = await FileSystem.getInfoAsync(kpModelUrl);
+      if (info.exists) {
+        setKpModelSourceUrl(kpModelUrl);
+        setKpModelStatus('Keypoint Modell bereit');
+        return true;
+      }
+      setKpModelStatus('Keypoint Modell wird geladen...');
+      const download = await FileSystem.downloadAsync(KP_MODEL_REMOTE_URL, kpModelUrl);
+      if (download.status !== 200) {
+        setKpModelStatus('Keypoint Download fehlgeschlagen');
+        return false;
+      }
+      setKpModelSourceUrl(kpModelUrl);
+      setKpModelStatus('Keypoint Modell geladen');
+      return true;
+    } catch {
+      setKpModelStatus('Keypoint Modell konnte nicht geladen werden');
+      return false;
+    }
+  }, [KP_MODEL_REMOTE_URL, kpModelUrl, modelDir]);
+
   useEffect(() => {
     let mounted = true;
     void loadDatasetIndex().then((items) => {
@@ -218,8 +272,11 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   }, [centerXValue, centerYValue, scaleValue, settings.centerX, settings.centerY, settings.scale]);
 
   const ready = useMemo(
-    () => hasPermission && device && layout.width > 0 && layout.height > 0,
-    [hasPermission, device, layout.width, layout.height]
+    () =>
+      cameraLayout.width > 0 &&
+      cameraLayout.height > 0 &&
+      (useSampleImage || (hasPermission && device !== null)),
+    [cameraLayout.height, cameraLayout.width, device, hasPermission, useSampleImage]
   );
 
   const format = useMemo(() => {
@@ -233,9 +290,9 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     }, formats[0]);
   }, [device]);
 
-  const onLayout = (event: LayoutChangeEvent) => {
+  const onCameraLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
-    setLayout({ width, height });
+    setCameraLayout({ width, height });
   };
 
   const onTouch = (event: any) => {
@@ -243,8 +300,8 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     const { locationX, locationY } = event.nativeEvent;
     if (calibrationStep !== null) {
       const nextPoint = {
-        x: clamp(locationX / layout.width, 0.02, 0.98),
-        y: clamp(locationY / layout.height, 0.02, 0.98),
+        x: clamp(locationX / cameraLayout.width, 0.02, 0.98),
+        y: clamp(locationY / cameraLayout.height, 0.02, 0.98),
       };
       const nextDraft = [...calibrationDraft, nextPoint];
       if (calibrationStep >= 3) {
@@ -258,13 +315,22 @@ export const CameraScoringView = ({ onDetect }: Props) => {
       return;
     }
     if (setupMode) {
-      const centerX = clamp(locationX / layout.width, 0.05, 0.95);
-      const centerY = clamp(locationY / layout.height, 0.05, 0.95);
+      const centerX = clamp(locationX / cameraLayout.width, 0.05, 0.95);
+      const centerY = clamp(locationY / cameraLayout.height, 0.05, 0.95);
       void update({ centerX, centerY });
       return;
     }
-    const hit = computeHit(locationX, locationY, layout.width, layout.height, settings);
-    if (hit) onDetect(hit);
+    const hit = computeHit(locationX, locationY, cameraLayout.width, cameraLayout.height, settings);
+    if (hit) {
+      setLastSimHit(hit);
+      setSimStatus(`Sim: ${hit.multiplier}${hit.segment} (${hit.points})`);
+      if (!useSampleImage) {
+        onDetect(hit);
+      }
+      return;
+    }
+    setLastSimHit(null);
+    setSimStatus('Sim: ausserhalb');
   };
 
   const onPinchEvent = useCallback(
@@ -288,6 +354,198 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     },
     [liveZoom, update]
   );
+
+  const analyzeSampleImage = useCallback(async () => {
+    if (!mlModel) {
+      setSampleStatus('ML Modell nicht bereit');
+      return;
+    }
+    try {
+      setSampleStatus('Analysiere Testbild...');
+      setSampleDetection(null);
+      const asset = Asset.fromModule(DEFAULT_TEST_IMAGE);
+      await asset.downloadAsync();
+      const uri = asset.localUri ?? asset.uri;
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const bytes = toByteArray(base64);
+      const decoded = decodeJpeg(bytes, { useTArray: true });
+      const srcW = decoded.width || sampleImageWidth;
+      const srcH = decoded.height || sampleImageHeight;
+      const src = decoded.data;
+      const input = new Float32Array(mlInputSize * mlInputSize * 3);
+      for (let y = 0; y < mlInputSize; y += 1) {
+        const srcY = Math.min(srcH - 1, Math.floor((y / mlInputSize) * srcH));
+        for (let x = 0; x < mlInputSize; x += 1) {
+          const srcX = Math.min(srcW - 1, Math.floor((x / mlInputSize) * srcW));
+          const srcIdx = (srcY * srcW + srcX) * 4;
+          const dstIdx = (y * mlInputSize + x) * 3;
+          input[dstIdx] = src[srcIdx] / 255;
+          input[dstIdx + 1] = src[srcIdx + 1] / 255;
+          input[dstIdx + 2] = src[srcIdx + 2] / 255;
+        }
+      }
+      const outputs = await mlModel.run([input]);
+      if (!outputs || outputs.length === 0) {
+        setSampleStatus('Keine ML Ausgabe');
+        return;
+      }
+      const output = outputs[0] as any;
+      const decode = (arr: any, inputSize: number, threshold: number) => {
+        let bestConf = 0;
+        let bestX = 0;
+        let bestY = 0;
+        const len = arr.length ?? 0;
+        if (len % 6 === 0) {
+          for (let i = 0; i < len; i += 6) {
+            const conf = arr[i + 4];
+            if (conf > bestConf) {
+              bestConf = conf;
+              bestX = arr[i];
+              bestY = arr[i + 1];
+            }
+          }
+        } else if (len % 84 === 0) {
+          const stride = len / 84;
+          for (let i = 0; i < stride; i += 1) {
+            const x = arr[i];
+            const y = arr[i + stride];
+            let cls = 0;
+            for (let c = 4; c < 84; c += 1) {
+              const score = arr[i + c * stride];
+              if (score > cls) cls = score;
+            }
+            if (cls > bestConf) {
+              bestConf = cls;
+              bestX = x;
+              bestY = y;
+            }
+          }
+        }
+        if (bestConf < threshold) return null;
+        let nx = bestX;
+        let ny = bestY;
+        if (nx > 1 || ny > 1) {
+          nx = nx / inputSize;
+          ny = ny / inputSize;
+        }
+        if (nx < 0 || ny < 0 || nx > 1 || ny > 1) return null;
+        return { nx, ny, conf: bestConf };
+      };
+      const detection = decode(output, mlInputSize, mlConfidence);
+      if (!detection) {
+        setSampleStatus('Keine Erkennung im Testbild');
+        return;
+      }
+      setSampleDetection({ x: detection.nx, y: detection.ny, conf: detection.conf });
+      setSampleStatus(`Erkennung: ${(detection.conf * 100).toFixed(1)}%`);
+    } catch (err) {
+      setSampleStatus('Testbild-Analyse fehlgeschlagen');
+    }
+  }, [mlConfidence, mlModel, mlInputSize, sampleImageHeight, sampleImageWidth]);
+
+  const autoCalibrateFromSample = useCallback(async () => {
+    if (!kpModel) {
+      const ok = await ensureKeypointModel();
+      if (!ok) return;
+      setSampleStatus('Keypoint Modell lädt, bitte erneut starten');
+      return;
+    }
+    if (cameraLayout.width === 0 || cameraLayout.height === 0) {
+      setSampleStatus('Layout nicht bereit');
+      return;
+    }
+    try {
+      setSampleStatus('Auto-Kalibrierung läuft...');
+      const asset = Asset.fromModule(DEFAULT_TEST_IMAGE);
+      await asset.downloadAsync();
+      const uri = asset.localUri ?? asset.uri;
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const bytes = toByteArray(base64);
+      const decoded = decodeJpeg(bytes, { useTArray: true });
+      const srcW = decoded.width || sampleImageWidth;
+      const srcH = decoded.height || sampleImageHeight;
+      const src = decoded.data;
+      const input = new Float32Array(mlInputSize * mlInputSize * 3);
+      for (let y = 0; y < mlInputSize; y += 1) {
+        const srcY = Math.min(srcH - 1, Math.floor((y / mlInputSize) * srcH));
+        for (let x = 0; x < mlInputSize; x += 1) {
+          const srcX = Math.min(srcW - 1, Math.floor((x / mlInputSize) * srcW));
+          const srcIdx = (srcY * srcW + srcX) * 4;
+          const dstIdx = (y * mlInputSize + x) * 3;
+          input[dstIdx] = src[srcIdx] / 255;
+          input[dstIdx + 1] = src[srcIdx + 1] / 255;
+          input[dstIdx + 2] = src[srcIdx + 2] / 255;
+        }
+      }
+      const outputs = await kpModel.run([input]);
+      if (!outputs || outputs.length === 0) {
+        setSampleStatus('Keine Keypoint Ausgabe');
+        return;
+      }
+      const output = outputs[0] as any;
+      const len = output.length ?? 0;
+      if (len < 8) {
+        setSampleStatus('Keypoint Ausgabe zu klein');
+        return;
+      }
+      const points: Point[] = [];
+      for (let i = 0; i < 8; i += 2) {
+        let x = Number(output[i]);
+        let y = Number(output[i + 1]);
+        if (x > 1 || y > 1) {
+          x = x / mlInputSize;
+          y = y / mlInputSize;
+        }
+        if (x < 0 || y < 0 || x > 1 || y > 1) {
+          setSampleStatus('Keypoint ausserhalb');
+          return;
+        }
+        points.push({ x, y });
+      }
+      if (points.length !== 4) {
+        setSampleStatus('Keypoint Anzahl falsch');
+        return;
+      }
+      const cx = points.reduce((sum, p) => sum + p.x, 0) / 4;
+      const cy = points.reduce((sum, p) => sum + p.y, 0) / 4;
+      const dists = points.map((p) => {
+        const dx = (p.x - cx) * cameraLayout.width;
+        const dy = (p.y - cy) * cameraLayout.height;
+        return Math.sqrt(dx * dx + dy * dy);
+      });
+      const avgDist = dists.reduce((sum, d) => sum + d, 0) / dists.length;
+      const scale = avgDist / (Math.min(cameraLayout.width, cameraLayout.height) / 2);
+      const dxTop = (points[0].x - cx) * cameraLayout.width;
+      const dyTop = (cy - points[0].y) * cameraLayout.height;
+      const degTop = (Math.atan2(dyTop, dxTop) * 180) / Math.PI;
+      const rotationDeg = Number((degTop - 90).toFixed(1));
+      await update({
+        calibrationPoints: points,
+        centerX: cx,
+        centerY: cy,
+        scale: clamp(scale, SCALE_MIN, SCALE_MAX),
+        rotationDeg,
+      });
+      setSampleStatus('Auto-Kalibrierung gesetzt');
+      setCalibrationStep(null);
+      setCalibrationDraft([]);
+    } catch {
+      setSampleStatus('Auto-Kalibrierung fehlgeschlagen');
+    }
+  }, [
+    cameraLayout.height,
+    cameraLayout.width,
+    ensureKeypointModel,
+    kpModel,
+    mlInputSize,
+    sampleImageHeight,
+    sampleImageWidth,
+    update,
+  ]);
 
   const captureDatasetSample = useCallback(async () => {
     if (!cameraRef.current) return;
@@ -389,7 +647,13 @@ export const CameraScoringView = ({ onDetect }: Props) => {
 
   const reportDetection = useCallback(
     (nx: number, ny: number) => {
-      const hit = computeHit(nx * layout.width, ny * layout.height, layout.width, layout.height, settings);
+      const hit = computeHit(
+        nx * cameraLayout.width,
+        ny * cameraLayout.height,
+        cameraLayout.width,
+        cameraLayout.height,
+        settings
+      );
       if (!hit) {
         setDetectStatus('Treffer ausserhalb');
         return;
@@ -397,7 +661,7 @@ export const CameraScoringView = ({ onDetect }: Props) => {
       setDetectStatus(`Auto: ${hit.multiplier}${hit.segment} (${hit.points})`);
       onDetect(hit);
     },
-    [layout.height, layout.width, onDetect, settings]
+    [cameraLayout.height, cameraLayout.width, onDetect, settings]
   );
 
   const frameProcessor = useFrameProcessor(
@@ -564,7 +828,7 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     ]
   );
 
-  if (!hasPermission) {
+  if (!useSampleImage && !hasPermission) {
     return (
       <View style={styles.permission}>
         <Text style={styles.permissionText}>Kamera-Berechtigung erforderlich.</Text>
@@ -575,7 +839,7 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     );
   }
 
-  if (!device) {
+  if (!useSampleImage && !device) {
     return (
       <View style={styles.permission}>
         <Text style={styles.permissionText}>Keine Kamera gefunden.</Text>
@@ -583,17 +847,92 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     );
   }
 
-  const zoomMin = device.minZoom ?? 1;
-  const zoomMax = device.maxZoom ?? 1;
+  const zoomMin = device?.minZoom ?? 1;
+  const zoomMax = device?.maxZoom ?? 1;
   const zoomValue = zoomMin + (zoomMax - zoomMin) * clamp(liveZoom, 0, 1);
 
-  const crossLeft = layout.width * settings.centerX - 8;
-  const crossTop = layout.height * settings.centerY - 8;
-  const boardRadius = (Math.min(layout.width, layout.height) / 2) * settings.scale;
-  const boardLeft = layout.width * settings.centerX - boardRadius;
-  const boardTop = layout.height * settings.centerY - boardRadius;
+  const crossLeft = cameraLayout.width * settings.centerX - 8;
+  const crossTop = cameraLayout.height * settings.centerY - 8;
+  const boardRadius = (Math.min(cameraLayout.width, cameraLayout.height) / 2) * settings.scale;
+  const boardLeft = cameraLayout.width * settings.centerX - boardRadius;
+  const boardTop = cameraLayout.height * settings.centerY - boardRadius;
   const hasCalibration = settings.calibrationPoints && settings.calibrationPoints.length === 4;
   const calibrationLabels = ['20 (oben)', '6 (rechts)', '3 (unten)', '11 (links)'];
+  const debugRings = [0.05, 0.1, 0.55, 0.65, 0.9, 1];
+  const debugLines = useMemo(() => Array.from({ length: 20 }, (_, i) => settings.rotationDeg + i * 18), [
+    settings.rotationDeg,
+  ]);
+  const debugLabels = useMemo(() => {
+    const centerX = cameraLayout.width * settings.centerX;
+    const centerY = cameraLayout.height * settings.centerY;
+    const radius = boardRadius * 0.98;
+    return BOARD_NUMBERS.map((num, i) => {
+      const normalized = i * 18 + 9;
+      const deg = 90 + settings.rotationDeg - normalized;
+      const rad = (deg * Math.PI) / 180;
+      return {
+        num,
+        left: centerX + Math.cos(rad) * radius - 8,
+        top: centerY - Math.sin(rad) * radius - 8,
+      };
+    });
+  }, [boardRadius, cameraLayout.height, cameraLayout.width, settings.centerX, settings.centerY, settings.rotationDeg]);
+  const zonePaths = useMemo(() => {
+    if (cameraLayout.width === 0 || cameraLayout.height === 0) return [];
+    const cx = cameraLayout.width * settings.centerX;
+    const cy = cameraLayout.height * settings.centerY;
+    const zones: { key: string; d: string; fill: string }[] = [];
+    const ringDefs = [
+      { key: 'singleInner', r0: 0.1, r1: 0.55 },
+      { key: 'triple', r0: 0.55, r1: 0.65 },
+      { key: 'singleOuter', r0: 0.65, r1: 0.9 },
+      { key: 'double', r0: 0.9, r1: 1.0 },
+    ];
+
+    const toPoint = (deg: number, r: number) => {
+      const rad = (deg * Math.PI) / 180;
+      return {
+        x: cx + Math.cos(rad) * r,
+        y: cy - Math.sin(rad) * r,
+      };
+    };
+
+    const buildWedgePath = (startN: number, endN: number, rInner: number, rOuter: number) => {
+      const startDeg = 90 + settings.rotationDeg - startN;
+      const endDeg = 90 + settings.rotationDeg - endN;
+      const steps = 6;
+      const outer: { x: number; y: number }[] = [];
+      const inner: { x: number; y: number }[] = [];
+      for (let i = 0; i <= steps; i += 1) {
+        const t = i / steps;
+        const deg = startDeg + (endDeg - startDeg) * t;
+        outer.push(toPoint(deg, rOuter));
+      }
+      for (let i = steps; i >= 0; i -= 1) {
+        const t = i / steps;
+        const deg = startDeg + (endDeg - startDeg) * t;
+        inner.push(toPoint(deg, rInner));
+      }
+      const points = [...outer, ...inner];
+      const d = points
+        .map((pt, idx) => `${idx === 0 ? 'M' : 'L'} ${pt.x.toFixed(2)} ${pt.y.toFixed(2)}`)
+        .join(' ');
+      return `${d} Z`;
+    };
+
+    for (let i = 0; i < 20; i += 1) {
+      const startN = i * 18;
+      const endN = (i + 1) * 18;
+      ringDefs.forEach((ring, ringIndex) => {
+        const d = buildWedgePath(startN, endN, boardRadius * ring.r0, boardRadius * ring.r1);
+        const even = i % 2 === 0;
+        const ringShade = ringIndex % 2 === 0 ? 0.22 : 0.14;
+        const base = even ? 'rgba(16,185,129,' : 'rgba(239,68,68,';
+        zones.push({ key: `${ring.key}-${i}`, d, fill: `${base}${ringShade})` });
+      });
+    }
+    return zones;
+  }, [boardRadius, cameraLayout.height, cameraLayout.width, settings.centerX, settings.centerY, settings.rotationDeg]);
 
   const markerPosition = useMemo(() => {
     if (!pendingSample || !annotationPoint) return null;
@@ -613,21 +952,110 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     };
   }, [annotationLayout.height, annotationLayout.width, annotationPoint, pendingSample]);
 
+  const sampleMarkerPosition = useMemo(() => {
+    if (!useSampleImage || !sampleDetection) return null;
+    const containerW = cameraLayout.width;
+    const containerH = cameraLayout.height;
+    if (containerW === 0 || containerH === 0) return null;
+    const imageW = sampleImageWidth;
+    const imageH = sampleImageHeight;
+    const scale = Math.min(containerW / imageW, containerH / imageH);
+    const displayW = imageW * scale;
+    const displayH = imageH * scale;
+    const offsetX = (containerW - displayW) / 2;
+    const offsetY = (containerH - displayH) / 2;
+    return {
+      left: offsetX + sampleDetection.x * displayW - 6,
+      top: offsetY + sampleDetection.y * displayH - 6,
+    };
+  }, [
+    cameraLayout.height,
+    cameraLayout.width,
+    sampleDetection,
+    sampleImageHeight,
+    sampleImageWidth,
+    useSampleImage,
+  ]);
+
   return (
-    <View style={styles.container} onLayout={onLayout}>
+    <View style={styles.container}>
       <PinchGestureHandler onGestureEvent={onPinchEvent} onHandlerStateChange={onPinchStateChange}>
-        <View>
-          <Camera
-            ref={cameraRef}
-            style={styles.camera}
-            device={device}
-            isActive
-            zoom={zoomValue}
-            format={format}
-            frameProcessor={frameProcessor}
-            frameProcessorFps={mlEnabled ? 4 : 6}
-          />
+        <View style={styles.cameraWrapper} onLayout={onCameraLayout}>
+          {useSampleImage ? (
+            <Image source={DEFAULT_TEST_IMAGE} style={styles.camera} resizeMode="contain" />
+          ) : (
+            <Camera
+              ref={cameraRef}
+              style={styles.camera}
+              device={device}
+              isActive
+              zoom={zoomValue}
+              format={format}
+              frameProcessor={frameProcessor}
+              frameProcessorFps={mlEnabled ? 4 : 6}
+            />
+          )}
           <Pressable style={styles.touchLayer} onPress={onTouch}>
+            {debugOverlay && (
+              <View pointerEvents="none" style={styles.debugOverlay}>
+                <Svg height={cameraLayout.height} width={cameraLayout.width} style={StyleSheet.absoluteFillObject}>
+                  {debugZones &&
+                    zonePaths.map((zone) => (
+                      <Path key={zone.key} d={zone.d} fill={zone.fill} stroke="rgba(0,0,0,0.08)" strokeWidth={0.5} />
+                    ))}
+                  {debugZones && (
+                    <>
+                      <Circle
+                        cx={cameraLayout.width * settings.centerX}
+                        cy={cameraLayout.height * settings.centerY}
+                        r={boardRadius * 0.05}
+                        fill="rgba(239,68,68,0.35)"
+                      />
+                      <Circle
+                        cx={cameraLayout.width * settings.centerX}
+                        cy={cameraLayout.height * settings.centerY}
+                        r={boardRadius * 0.1}
+                        fill="rgba(16,185,129,0.2)"
+                      />
+                    </>
+                  )}
+                </Svg>
+                {debugRings.map((ratio) => (
+                  <View
+                    key={`ring-${ratio}`}
+                    style={[
+                      styles.debugRing,
+                      {
+                        width: boardRadius * 2 * ratio,
+                        height: boardRadius * 2 * ratio,
+                        left: boardLeft + boardRadius * (1 - ratio),
+                        top: boardTop + boardRadius * (1 - ratio),
+                      },
+                    ]}
+                  />
+                ))}
+                {debugLines.map((deg, index) => (
+                  <View
+                    key={`line-${index}`}
+                    style={[
+                      styles.debugLine,
+                      {
+                        left: cameraLayout.width * settings.centerX - 1,
+                        top: cameraLayout.height * settings.centerY - boardRadius,
+                        height: boardRadius,
+                        transform: [{ rotateZ: `${deg}deg` }],
+                      },
+                    ]}
+                  />
+                ))}
+                {debugNumbers &&
+                  debugLabels.map((label) => (
+                    <Text key={`label-${label.num}`} style={[styles.debugLabel, { left: label.left, top: label.top }]}>
+                      {label.num}
+                    </Text>
+                  ))}
+              </View>
+            )}
             {setupMode && (
               <View pointerEvents="none" style={styles.overlay}>
                 <View
@@ -640,8 +1068,8 @@ export const CameraScoringView = ({ onDetect }: Props) => {
                   style={[
                     styles.boardLine,
                     {
-                      left: layout.width * settings.centerX - 1,
-                      top: layout.height * settings.centerY - boardRadius,
+                      left: cameraLayout.width * settings.centerX - 1,
+                      top: cameraLayout.height * settings.centerY - boardRadius,
                       height: boardRadius,
                       transform: [{ rotateZ: `${settings.rotationDeg}deg` }],
                     },
@@ -654,8 +1082,8 @@ export const CameraScoringView = ({ onDetect }: Props) => {
                       style={[
                         styles.calibrationPoint,
                         {
-                          left: pt.x * layout.width - 6,
-                          top: pt.y * layout.height - 6,
+                          left: pt.x * cameraLayout.width - 6,
+                          top: pt.y * cameraLayout.height - 6,
                         },
                       ]}
                     />
@@ -666,13 +1094,26 @@ export const CameraScoringView = ({ onDetect }: Props) => {
                     style={[
                       styles.calibrationPointDraft,
                       {
-                        left: pt.x * layout.width - 6,
-                        top: pt.y * layout.height - 6,
+                        left: pt.x * cameraLayout.width - 6,
+                        top: pt.y * cameraLayout.height - 6,
                       },
                     ]}
                   />
                 ))}
               </View>
+            )}
+            {simStatus && <Text style={styles.simBadge}>{simStatus}</Text>}
+            {sampleMarkerPosition && (
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.detectionMarker,
+                  {
+                    left: sampleMarkerPosition.left,
+                    top: sampleMarkerPosition.top,
+                  },
+                ]}
+              />
             )}
             <View style={[styles.crosshair, { left: crossLeft, top: crossTop }]} />
             <Text style={styles.hint}>
@@ -685,7 +1126,7 @@ export const CameraScoringView = ({ onDetect }: Props) => {
           </Pressable>
         </View>
       </PinchGestureHandler>
-      <View style={styles.panel}>
+      <ScrollView style={styles.panel} contentContainerStyle={styles.panelContent}>
         <View style={styles.row}>
           <Text style={styles.panelTitle}>Kamera Setup</Text>
           <Pressable style={styles.toggle} onPress={() => setSetupMode((prev) => !prev)}>
@@ -695,6 +1136,34 @@ export const CameraScoringView = ({ onDetect }: Props) => {
         <Text style={styles.meta}>
           Aufloesung: {format?.videoWidth ?? '-'}x{format?.videoHeight ?? '-'}
         </Text>
+        <View style={styles.adjustRow}>
+          <Text style={styles.label}>Testbild</Text>
+          <View style={styles.controls}>
+            <Pressable style={styles.controlButton} onPress={() => setUseSampleImage((prev) => !prev)}>
+              <Text>{useSampleImage ? 'Kamera' : 'Testbild'}</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.meta}>{useSampleImage ? 'Testbild aktiv' : 'Kamera aktiv'}</Text>
+          {simStatus && <Text style={styles.meta}>{simStatus}</Text>}
+        </View>
+        <View style={styles.adjustRow}>
+          <Text style={styles.label}>Debug Overlay</Text>
+          <View style={styles.controls}>
+            <Pressable style={styles.controlButton} onPress={() => setDebugOverlay((prev) => !prev)}>
+              <Text>{debugOverlay ? 'Aus' : 'An'}</Text>
+            </Pressable>
+            <Pressable style={styles.controlButton} onPress={() => setDebugNumbers((prev) => !prev)}>
+              <Text>{debugNumbers ? 'Nummern aus' : 'Nummern an'}</Text>
+            </Pressable>
+            <Pressable style={styles.controlButton} onPress={() => setDebugZones((prev) => !prev)}>
+              <Text>{debugZones ? 'Zonen aus' : 'Zonen an'}</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.meta}>
+            Center: {settings.centerX.toFixed(3)}, {settings.centerY.toFixed(3)} | Scale: {settings.scale.toFixed(3)} |
+            Rot: {settings.rotationDeg}°
+          </Text>
+        </View>
         <Text style={styles.label}>Zoom</Text>
         <Slider
           value={liveZoom}
@@ -737,14 +1206,14 @@ export const CameraScoringView = ({ onDetect }: Props) => {
           <View style={styles.controls}>
             <Pressable
               style={styles.controlButton}
-              onPress={() => update({ scale: clamp(settings.scale - 0.05, 0.6, 1.4) })}
+              onPress={() => update({ scale: clamp(settings.scale - 0.05, SCALE_MIN, SCALE_MAX) })}
             >
               <Text>-</Text>
             </Pressable>
             <Text>{settings.scale.toFixed(2)}</Text>
             <Pressable
               style={styles.controlButton}
-              onPress={() => update({ scale: clamp(settings.scale + 0.05, 0.6, 1.4) })}
+              onPress={() => update({ scale: clamp(settings.scale + 0.05, SCALE_MIN, SCALE_MAX) })}
             >
               <Text>+</Text>
             </Pressable>
@@ -793,6 +1262,10 @@ export const CameraScoringView = ({ onDetect }: Props) => {
             <Pressable
               style={styles.controlButton}
               onPress={() => {
+                if (useSampleImage) {
+                  setDetectStatus('Auto-Scan im Testbild-Modus deaktiviert.');
+                  return;
+                }
                 baselineRequest.value += 1;
                 setDetectStatus('Baseline anfordern...');
               }}
@@ -802,6 +1275,10 @@ export const CameraScoringView = ({ onDetect }: Props) => {
             <Pressable
               style={styles.controlButton}
               onPress={() => {
+                if (useSampleImage) {
+                  setDetectStatus('Auto-Scan im Testbild-Modus deaktiviert.');
+                  return;
+                }
                 const next = !autoScan;
                 setAutoScan(next);
                 setDetectStatus(next ? 'Auto aktiv' : 'Auto aus');
@@ -822,6 +1299,10 @@ export const CameraScoringView = ({ onDetect }: Props) => {
             <Pressable
               style={styles.controlButton}
               onPress={() => {
+                if (useSampleImage) {
+                  setDetectStatus('ML Live-Scan im Testbild-Modus deaktiviert.');
+                  return;
+                }
                 if (!mlReady) {
                   setDetectStatus('ML Modell fehlt (siehe Pfad unten).');
                   return;
@@ -854,7 +1335,20 @@ export const CameraScoringView = ({ onDetect }: Props) => {
             </View>
           </View>
           <Text style={styles.meta}>Model Pfad: {modelUrl}</Text>
+        <View style={styles.adjustRow}>
+          <Text style={styles.label}>Testbild Analyse</Text>
+          <View style={styles.controls}>
+            <Pressable style={styles.controlButton} onPress={analyzeSampleImage}>
+              <Text>Analysieren</Text>
+            </Pressable>
+            <Pressable style={styles.controlButton} onPress={autoCalibrateFromSample}>
+              <Text>Auto-Kalibrieren (ML)</Text>
+            </Pressable>
+          </View>
+          {sampleStatus && <Text style={styles.meta}>{sampleStatus}</Text>}
+          {kpModelStatus && <Text style={styles.meta}>{kpModelStatus}</Text>}
         </View>
+      </View>
         <View style={styles.adjustRow}>
           <Text style={styles.label}>Dataset Capture</Text>
           <Text style={styles.meta}>Aktuell gespeichert: {datasetCount}</Text>
@@ -868,7 +1362,7 @@ export const CameraScoringView = ({ onDetect }: Props) => {
         <Pressable style={styles.reset} onPress={reset}>
           <Text style={styles.resetText}>Reset</Text>
         </Pressable>
-      </View>
+      </ScrollView>
       <Modal visible={!!pendingSample} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
@@ -913,6 +1407,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#111827',
     marginBottom: 16,
   },
+  cameraWrapper: {
+    width: '100%',
+  },
   camera: {
     width: '100%',
     height: 320,
@@ -923,11 +1420,37 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
   },
+  debugOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
   boardOutline: {
     position: 'absolute',
     borderColor: 'rgba(255,255,255,0.7)',
     borderWidth: 2,
     borderRadius: 999,
+  },
+  debugRing: {
+    position: 'absolute',
+    borderColor: 'rgba(59,130,246,0.7)',
+    borderWidth: 1,
+    borderRadius: 999,
+  },
+  debugLine: {
+    position: 'absolute',
+    width: 1,
+    backgroundColor: 'rgba(59,130,246,0.7)',
+  },
+  debugLabel: {
+    position: 'absolute',
+    color: '#111827',
+    fontSize: 10,
+    fontWeight: '700',
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 6,
+    textAlign: 'center',
+    minWidth: 20,
   },
   boardLine: {
     position: 'absolute',
@@ -947,6 +1470,15 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     backgroundColor: 'rgba(59,130,246,0.9)',
+  },
+  detectionMarker: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: '#f97316',
+    backgroundColor: 'rgba(249,115,22,0.2)',
   },
   crosshair: {
     position: 'absolute',
@@ -969,9 +1501,25 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
   },
+  simBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    color: '#111827',
+    fontSize: 12,
+    fontWeight: '600',
+    backgroundColor: 'rgba(251,191,36,0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
   panel: {
     backgroundColor: '#f9fafb',
+    maxHeight: 360,
+  },
+  panelContent: {
     padding: 12,
+    paddingBottom: 16,
   },
   panelTitle: {
     fontWeight: '700',

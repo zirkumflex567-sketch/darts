@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useGameStore } from '../store/gameStore';
 import { Scoreboard } from '../components/Scoreboard';
 import { PrimaryButton } from '../components/PrimaryButton';
@@ -34,7 +34,7 @@ export const GameScreen = () => {
   const scores = mode === 'X01' ? x01State?.remaining : cricketState?.points;
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Match: {mode}</Text>
       {cameraEnabled && <CameraScoringView onDetect={queueDetectedHit} />}
       <Scoreboard players={match.players} activePlayerId={activePlayerId} scores={scores} />
@@ -56,15 +56,19 @@ export const GameScreen = () => {
         onCancel={closeHitModal}
         onConfirm={applyManualHit}
       />
-    </View>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 24,
     backgroundColor: '#ffffff',
+  },
+  content: {
+    paddingBottom: 32,
   },
   title: {
     fontSize: 20,
