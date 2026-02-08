@@ -99,6 +99,7 @@ Anforderungen:
 - Zoom via Slider und Pinch-Geste
 - PoC-Modus: Baseline/Scan (Frame-Differenz) fuer erste Treffer
 - Auto-Scan Modus fuer quasi-live Erkennung (Intervall-Scan)
+- Realtime Pipeline (native) ueber VisionCamera Frame Processor
 
 Edge Cases:
 - Okklusion durch Hand oder Dartkörper

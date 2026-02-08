@@ -38,7 +38,14 @@
     "plugins": [
       "expo-sqlite",
       "expo-camera",
-      "expo-dev-client"
+      "expo-dev-client",
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "Camera access is required for live dart scoring.",
+          "microphonePermissionText": "Microphone access is optional."
+        }
+      ]
     ],
     "extra": {
       "eas": {

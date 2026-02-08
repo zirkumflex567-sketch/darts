@@ -51,6 +51,10 @@ Hinweis: Bei starkem Lichtwechsel oder Bewegung kann die Erkennung fehlschlagen.
 - Nach jedem erkannten Treffer wird die Baseline automatisch aktualisiert.
 - Fuer bessere Ergebnisse: zwischen Wuerfen kurz stillhalten, Hand aus dem Bild.
 
+### Realtime Pipeline (native)
+- Nutzt VisionCamera Frame Processor, laeuft kontinuierlich im Hintergrund.
+- Beste Ergebnisse mit stabiler Kamera und 4-Punkt-Kalibrierung.
+
 ## Fehlerdiagnose
 - Treffer liegt daneben -> Board-Mitte und Rotation pruefen.
 - Treffer grob falsch -> 4-Punkt-Kalibrierung wiederholen.

@@ -1,6 +1,6 @@
 # Custom Dev Client Setup
 
-Ziel: Native Features wie Kamera/ML in der App testen (Expo Go reicht dafuer nicht).
+Ziel: Native Features wie VisionCamera/Realtime-Scoring in der App testen (Expo Go reicht dafuer nicht).
 
 ## Voraussetzungen
 - Expo Account
@@ -25,6 +25,8 @@ Nach Build:
 npm run dev:client -- --tunnel
 ```
 - QR Code mit dem Dev Client scannen
+
+Hinweis: Nach Aenderungen an nativen Dependencies (z.B. VisionCamera) muss ein neuer Dev Client gebaut werden.
 
 ## iOS Dev Build
 iOS braucht EAS Build + TestFlight.

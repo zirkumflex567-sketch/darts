@@ -121,12 +121,13 @@ Echte, live Kamera-basierte Erkennung von Darttreffern und automatischer Score-B
 5. Integration in Custom Dev Client
 
 ## Implementierungsstatus (MVP-Phase)
-- Kamera-Vorschau ueber `expo-camera` integriert.
+- Kamera-Vorschau: Web via `expo-camera`, Native via `react-native-vision-camera`.
 - Tap-zu-Score: Tippen auf das Board im Kamerabild erzeugt einen Treffer und oeffnet den Korrektur-Dialog.
 - Automatische Erkennung ist noch nicht aktiv (erfordert ML/Native Pipeline).
 - Heuristik-PoC: Baseline/Scan (Frame-Differenz) zur groben Treffer-Erkennung.
 - Hinweis: PoC ist experimentell und braucht ruhige Hand und gutes Licht.
 - Auto-Scan (quasi live): Wiederholter Scan im festen Intervall, Baseline wird nach Treffern aktualisiert.
+- Realtime Pipeline (native): VisionCamera Frame Processor + Downscale + Diff-Analyse (siehe `docs/REALTIME_PIPELINE.md`).
 
 ## Custom Dev Client erforderlich
 - Kamera + ML Module laufen nicht in Expo Go.

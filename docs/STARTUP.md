@@ -18,7 +18,7 @@ cd /root/darts
 npm run dev:tunnel
 ```
 
-## 3) Custom Dev Client (Kamera/ML)
+## 3) Custom Dev Client (VisionCamera/Realtime)
 ### Build
 ```bash
 eas login
