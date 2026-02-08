@@ -26,8 +26,11 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "CAMERA"
-      ]
+        "CAMERA",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "org.zirkumflex567.dartsmind"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -36,6 +39,15 @@
       "expo-sqlite",
       "expo-camera",
       "expo-dev-client"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "05c0867e-8b5b-4b07-befd-628974613370"
+      }
+    },
+    "owner": "zirkumflex567",
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    }
   }
 }
