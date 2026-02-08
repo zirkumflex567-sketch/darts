@@ -21,7 +21,7 @@ https://apps.apple.com/us/app/dartsense-darts-with-voice/id6470947519
 
 ### Kurzbeschreibung
 - Autoscoring per Kamera mit Deep Learning.
-- On-Device Score-Berechnung durch Erkennung von Dart-Positionen.
+- Lokale Score-Berechnung in einer Python-App, die den Kamera-Stream vom Smartphone verarbeitet.
 - Board-Kalibrierung ueber 4 Referenzpunkte, um Koordinaten in ein Standard-Board zu transformieren.
 - GUI und Game-Logik fuer X01/Cricket; unterstuetzt mehrere Spieler.
 
