@@ -124,3 +124,9 @@ Echte, live Kamera-basierte Erkennung von Darttreffern und automatischer Score-B
 - Kamera + ML Module laufen nicht in Expo Go.
 - Dev Client ist Voraussetzung fuer echte Live-Erkennung.
 - Setup: `docs/DEV_CLIENT.md`
+
+## Kamera-Setup in der App (MVP)
+- Zoom Slider (0..1) fuer die Vorschau
+- Board-Mitte per Tap im Setup-Modus
+- Rotation und Skalierung anpassbar
+- Einstellungen werden lokal gespeichert
