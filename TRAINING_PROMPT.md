@@ -18,6 +18,9 @@ Use any combination that fits the license and quality needs:
 - Roboflow Universe: `tip-2` (keypoint dataset for dart tips, CC BY 4.0).
 - DeepDarts dataset (IEEE Dataport, referenced in the DeepDarts repo); includes calibration points and dart locations.
 
+## Existing Projects / Models (Reference Only)
+- Dart Sense uses a YOLOv8 model to detect dart positions plus 4 calibration points, but its license is non-commercial. Use only as a reference unless you get permission.
+
 ## Training Plan (Keypoints)
 Pick one path:
 
