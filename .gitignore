@@ -46,8 +46,12 @@ expo-web.log
 
 # Python/ML artifacts
 .venv/
+*.npy
+.idea/
 ml/dataset/
+ml/board_kp*/
 ml/external/
+ml/logs/
 runs/
 *.pt
 *.tflite

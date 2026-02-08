@@ -21,6 +21,14 @@ npm run lint
 Fuer Kamera/ML Features wird ein Custom Dev Client benoetigt.
 Siehe: `docs/DEV_CLIENT.md`
 
+## Aktueller Stand (2026-02-08)
+- Kamera-Setup + Debug-Overlay in `CameraScoringView`
+- Testbild vorhanden: `assets/dartboard-default.jpg` (Toggle in der UI)
+- ML Modelle (remote):
+  - Dart-Tip: `dart_tip_2026-02-08.tflite`
+  - Board-Keypoints: `board_kp_2026-02-08.tflite`
+- Live Tracking laeuft im Dev Client (Auto-Scan/ML Start)
+
 ## Doku
 - Ausfuehrliche Doku: `docs/APP_DOC.md`
 - Architektur: `docs/ARCHITECTURE.md`

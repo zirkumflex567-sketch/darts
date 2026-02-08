@@ -113,6 +113,18 @@ Akzeptanzkriterien:
 Hinweis:
 - Detaillierte Setup-Schritte stehen in `docs/SETUP_GUIDE.md`.
 
+### Aktueller Implementierungsstand (2026-02-08)
+- Dev Client erforderlich fuer Kamera + ML (VisionCamera, fast-tflite).
+- `CameraScoringView` bietet:
+- Debug Overlay (Nummern/Zonen an/aus)
+- Testbild-Ansicht als Demo
+- Auto-Scan + ML Start fuer Live-Erkennung
+- 4-Punkt-Kalibrierung (20/6/3/11) und Auto-Kalibrierung via Keypoint-Modell
+- ML Modelle werden bei Bedarf geladen:
+- `dart_tip_2026-02-08.tflite`
+- `board_kp_2026-02-08.tflite`
+
+
 ### 3) Dual-Device-Modus
 Ziele:
 - Höhere Präzision durch zweiten Kamerawinkel

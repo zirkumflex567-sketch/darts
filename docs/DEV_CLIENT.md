@@ -20,6 +20,7 @@ eas build -p android --profile development
 
 Nach Build:
 - APK herunterladen und auf dem Android-Geraet installieren
+- Optional: APK in Appetize hochladen (funktioniert als Dev Client)
 - Dev Server starten:
 ```bash
 npm run dev:client -- --tunnel
@@ -43,6 +44,16 @@ npm run dev:client -- --tunnel
 ```bash
 npm run dev
 ```
+
+## Live Tracking + Debug
+Die Live-Erkennung (Darts + Board-Keypoints) laeuft nur im Dev Client.
+In `CameraScoringView` gibt es Debug-Optionen:
+- Debug Overlay (Nummern/Zonen einblendbar)
+- Testbild Toggle (Default: Testbild aktiv)
+- Auto-Kalibrieren (ML) ueber das Keypoint-Modell
+- Auto-Scan / ML Start fuer Live-Erkennung
+
+Hinweis: Wenn die ML-Modelle fehlen, werden sie aus `https://h-town.duckdns.org/models/` geladen.
 
 ## Troubleshooting
 - Wenn der QR Code nicht laedt: Cache in App leeren und neu scannen
