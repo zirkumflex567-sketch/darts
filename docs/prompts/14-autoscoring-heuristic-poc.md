@@ -18,6 +18,7 @@ Erstelle einen minimalen, lokal laufenden Autoscoring-PoC ohne ML. Ziel: Treffer
 1. Frame Capture:
    - Baseline-Frame speichern (leeres Board).
    - Scan-Frame nach dem Wurf aufnehmen (manueller Trigger).
+   - Optional: Auto-Scan im Intervall (quasi live).
 2. Bewegungserkennung:
    - Pixel-Differenz berechnen (Schwellwert).
    - Groesste Kontur/Cluster als Dart-Region annehmen.

@@ -98,6 +98,7 @@ Anforderungen:
 - Kalibrierung per Board-Mitte und optionaler 4-Punkt-Kalibrierung
 - Zoom via Slider und Pinch-Geste
 - PoC-Modus: Baseline/Scan (Frame-Differenz) fuer erste Treffer
+- Auto-Scan Modus fuer quasi-live Erkennung (Intervall-Scan)
 
 Edge Cases:
 - Okklusion durch Hand oder Dartkörper

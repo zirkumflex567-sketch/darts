@@ -46,6 +46,11 @@ Dieser Modus ist experimentell und dient nur als Proof-of-Concept.
 5. Ergebnis wird als Treffer angezeigt oder kann manuell korrigiert werden.
 Hinweis: Bei starkem Lichtwechsel oder Bewegung kann die Erkennung fehlschlagen.
 
+### Auto-Scan (quasi live)
+- `Auto Start` aktiviert einen wiederholten Scan alle ~1.8s.
+- Nach jedem erkannten Treffer wird die Baseline automatisch aktualisiert.
+- Fuer bessere Ergebnisse: zwischen Wuerfen kurz stillhalten, Hand aus dem Bild.
+
 ## Fehlerdiagnose
 - Treffer liegt daneben -> Board-Mitte und Rotation pruefen.
 - Treffer grob falsch -> 4-Punkt-Kalibrierung wiederholen.

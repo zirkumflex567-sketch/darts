@@ -97,6 +97,9 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   const [liveZoom, setLiveZoom] = useState(0);
   const [baselineBase64, setBaselineBase64] = useState<string | null>(null);
   const [detectStatus, setDetectStatus] = useState<string | null>(null);
+  const [autoScan, setAutoScan] = useState(false);
+  const scanInFlight = useRef(false);
+  const lastHitAt = useRef<number | null>(null);
   const cameraRef = useRef<CameraViewRef | null>(null);
   const pinchStartZoom = useRef(0);
 
@@ -265,10 +268,69 @@ export const CameraScoringView = ({ onDetect }: Props) => {
       }
       setDetectStatus(`Treffer ${hit.multiplier}${hit.segment} (${hit.points})`);
       onDetect(hit);
+      setBaselineBase64(photo.base64);
+      lastHitAt.current = Date.now();
     } catch {
       setDetectStatus('Scan fehlgeschlagen');
     }
   }, [baselineBase64, layout.height, layout.width, onDetect, settings]);
+
+  const runAutoScanTick = useCallback(async () => {
+    if (!cameraRef.current) return;
+    if (scanInFlight.current) return;
+    const now = Date.now();
+    if (lastHitAt.current && now - lastHitAt.current < 1500) return;
+
+    scanInFlight.current = true;
+    try {
+      if (!baselineBase64) {
+        await captureBaseline();
+        return;
+      }
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.2,
+        base64: true,
+        skipProcessing: true,
+      });
+      if (!photo?.base64) return;
+
+      const detection = detectDartFromDiff(baselineBase64, photo.base64, {
+        centerX: settings.centerX,
+        centerY: settings.centerY,
+        scale: settings.scale,
+        calibrationPoints: settings.calibrationPoints,
+      });
+
+      if (!detection) {
+        return;
+      }
+
+      const hit = computeHit(
+        detection.x * layout.width,
+        detection.y * layout.height,
+        layout.width,
+        layout.height,
+        settings
+      );
+      if (!hit) {
+        return;
+      }
+      setDetectStatus(`Auto: ${hit.multiplier}${hit.segment} (${hit.points})`);
+      onDetect(hit);
+      setBaselineBase64(photo.base64);
+      lastHitAt.current = Date.now();
+    } finally {
+      scanInFlight.current = false;
+    }
+  }, [baselineBase64, captureBaseline, layout.height, layout.width, onDetect, settings]);
+
+  useEffect(() => {
+    if (!autoScan) return;
+    const interval = setInterval(() => {
+      void runAutoScanTick();
+    }, 1800);
+    return () => clearInterval(interval);
+  }, [autoScan, runAutoScanTick]);
 
   if (!permission?.granted) {
     return (
@@ -476,6 +538,12 @@ export const CameraScoringView = ({ onDetect }: Props) => {
               <Text>Scan</Text>
             </Pressable>
             <Text style={styles.meta}>{baselineBase64 ? 'Baseline OK' : 'Keine Baseline'}</Text>
+          </View>
+          <View style={styles.controls}>
+            <Pressable style={styles.controlButton} onPress={() => setAutoScan((prev) => !prev)}>
+              <Text>{autoScan ? 'Auto Stop' : 'Auto Start'}</Text>
+            </Pressable>
+            <Text style={styles.meta}>{autoScan ? 'Auto aktiv' : 'Auto aus'}</Text>
           </View>
           {detectStatus && <Text style={styles.meta}>{detectStatus}</Text>}
         </View>

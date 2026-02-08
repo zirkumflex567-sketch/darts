@@ -126,6 +126,7 @@ Echte, live Kamera-basierte Erkennung von Darttreffern und automatischer Score-B
 - Automatische Erkennung ist noch nicht aktiv (erfordert ML/Native Pipeline).
 - Heuristik-PoC: Baseline/Scan (Frame-Differenz) zur groben Treffer-Erkennung.
 - Hinweis: PoC ist experimentell und braucht ruhige Hand und gutes Licht.
+- Auto-Scan (quasi live): Wiederholter Scan im festen Intervall, Baseline wird nach Treffern aktualisiert.
 
 ## Custom Dev Client erforderlich
 - Kamera + ML Module laufen nicht in Expo Go.

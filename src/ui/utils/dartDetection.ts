@@ -19,6 +19,7 @@ export interface DetectionResult {
 interface DetectionOptions {
   threshold?: number;
   minCount?: number;
+  maxCount?: number;
   sampleSize?: number;
 }
 
@@ -72,6 +73,7 @@ export const detectDartFromDiff = (
 ): DetectionResult | null => {
   const threshold = options.threshold ?? 28;
   const minCount = options.minCount ?? 25;
+  const maxCount = options.maxCount ?? 1800;
   const sampleSize = options.sampleSize ?? 200;
 
   const baseBytes = toByteArray(baselineBase64);
@@ -108,6 +110,7 @@ export const detectDartFromDiff = (
   }
 
   if (count < minCount) return null;
+  if (count > maxCount) return null;
 
   return {
     x: sumX / count / width,
