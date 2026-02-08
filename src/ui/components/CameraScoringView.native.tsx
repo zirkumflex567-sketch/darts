@@ -118,14 +118,20 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   const [pendingSample, setPendingSample] = useState<DatasetSample | null>(null);
   const [annotationPoint, setAnnotationPoint] = useState<Point | null>(null);
   const [annotationLayout, setAnnotationLayout] = useState({ width: 0, height: 0 });
+  const [modelStatus, setModelStatus] = useState<string | null>(null);
+  const [modelSourceUrl, setModelSourceUrl] = useState<string>('');
   const cameraRef = useRef<Camera>(null);
   const pinchStartZoom = useRef(0);
 
   const { settings, load, update, reset } = useCameraSettingsStore();
 
   const mlInputSize = 320;
-  const modelUrl = `${FileSystem.documentDirectory ?? ''}models/dart_tip.tflite`;
-  const tflite = useTensorflowModel({ url: modelUrl });
+  const MODEL_VERSION = '2026-02-08';
+  const modelDir = `${FileSystem.documentDirectory ?? ''}models/`;
+  const modelFilename = `dart_tip_${MODEL_VERSION}.tflite`;
+  const modelUrl = `${modelDir}${modelFilename}`;
+  const MODEL_REMOTE_URL = `https://h-town.duckdns.org/models/${modelFilename}`;
+  const tflite = useTensorflowModel({ url: modelSourceUrl });
   const mlModel = tflite.state === 'loaded' ? tflite.model : undefined;
   const mlReady = tflite.state === 'loaded';
 
@@ -138,6 +144,43 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    let mounted = true;
+    const ensureModel = async () => {
+      try {
+        if (!FileSystem.documentDirectory) {
+          if (mounted) setModelStatus('Kein lokales Dateisystem verfügbar');
+          return;
+        }
+        await FileSystem.makeDirectoryAsync(modelDir, { intermediates: true });
+        const info = await FileSystem.getInfoAsync(modelUrl);
+        if (info.exists) {
+          if (mounted) {
+            setModelSourceUrl(modelUrl);
+            setModelStatus('Modell bereit');
+          }
+          return;
+        }
+        if (mounted) setModelStatus('Modell wird geladen...');
+        const download = await FileSystem.downloadAsync(MODEL_REMOTE_URL, modelUrl);
+        if (download.status !== 200) {
+          if (mounted) setModelStatus('Modell Download fehlgeschlagen');
+          return;
+        }
+        if (mounted) {
+          setModelSourceUrl(modelUrl);
+          setModelStatus('Modell geladen');
+        }
+      } catch (err) {
+        if (mounted) setModelStatus('Modell konnte nicht geladen werden');
+      }
+    };
+    void ensureModel();
+    return () => {
+      mounted = false;
+    };
+  }, [modelDir, modelUrl, MODEL_REMOTE_URL]);
 
   useEffect(() => {
     let mounted = true;
@@ -774,6 +817,7 @@ export const CameraScoringView = ({ onDetect }: Props) => {
           <Text style={styles.meta}>
             Modell: {mlReady ? 'bereit' : tflite.state === 'error' ? 'fehlt' : tflite.state}
           </Text>
+          {modelStatus && <Text style={styles.meta}>Model-Status: {modelStatus}</Text>}
           <View style={styles.controls}>
             <Pressable
               style={styles.controlButton}
