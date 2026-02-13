@@ -2,5 +2,9 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true
-  }
+  },
+  "exclude": [
+    "src/ui/components/CameraScoringView.native.tsx",
+    "src/ui/components/CameraScoringView.web.tsx"
+  ]
 }

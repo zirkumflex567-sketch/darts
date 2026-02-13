@@ -4,7 +4,7 @@ import { useGameStore } from '../store/gameStore';
 import { Scoreboard } from '../components/Scoreboard';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { HitCorrectionModal } from '../components/HitCorrectionModal';
-import { CameraScoringView } from '../components/CameraScoringView';
+import { CameraScoringView } from '../components/CameraScoringViewSafe';
 
 export const GameScreen = () => {
   const match = useGameStore((s) => s.match);
