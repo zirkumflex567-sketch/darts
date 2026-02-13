@@ -5,6 +5,7 @@ import { RootStackParamList } from '../navigation/types';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { useGameStore } from '../store/gameStore';
 import { createId } from '../../shared/utils';
+import { appStyles, colors, radius, spacing } from '../theme';
 
 export const PlayerSetupScreen = ({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'PlayerSetup'>) => {
   const [playerOne, setPlayerOne] = useState('Player 1');
@@ -22,37 +23,33 @@ export const PlayerSetupScreen = ({ route, navigation }: NativeStackScreenProps<
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Spieler einrichten</Text>
+    <View style={appStyles.screen}>
+      <Text style={appStyles.sectionTitle}>Spieler einrichten</Text>
       <Text style={styles.label}>Spieler 1</Text>
-      <TextInput style={styles.input} value={playerOne} onChangeText={setPlayerOne} />
+      <TextInput style={styles.input} value={playerOne} onChangeText={setPlayerOne} placeholderTextColor={colors.textMuted} />
       <Text style={styles.label}>Spieler 2</Text>
-      <TextInput style={styles.input} value={playerTwo} onChangeText={setPlayerTwo} />
-      <PrimaryButton label="Match starten" onPress={start} />
+      <TextInput style={styles.input} value={playerTwo} onChangeText={setPlayerTwo} placeholderTextColor={colors.textMuted} />
+      <PrimaryButton label="Match starten" onPress={start} style={styles.cta} />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 24,
-    backgroundColor: '#ffffff',
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 16,
-  },
   label: {
     fontSize: 14,
-    marginTop: 12,
+    marginTop: spacing.sm,
+    color: colors.textMuted,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    padding: 10,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    padding: 12,
     marginTop: 6,
+    color: colors.text,
+    backgroundColor: colors.surface,
+  },
+  cta: {
+    marginTop: spacing.md,
   },
 });

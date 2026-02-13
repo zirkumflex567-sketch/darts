@@ -1,6 +1,13 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Switch } from 'react-native';
 import { useEntitlementStore } from '../store/entitlementStore';
+import { appStyles, colors, radius, spacing } from '../theme';
+
+const items = [
+  { key: 'premium_training', label: 'Premium Training' },
+  { key: 'online_video', label: 'Online Video' },
+  { key: 'advanced_stats', label: 'Advanced Stats' },
+] as const;
 
 export const SettingsScreen = () => {
   const entitlements = useEntitlementStore((s) => s.entitlements);
@@ -12,45 +19,32 @@ export const SettingsScreen = () => {
   }, [load]);
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Settings</Text>
-      <View style={styles.row}>
-        <Text>Premium Training</Text>
-        <Switch
-          value={!!entitlements.premium_training}
-          onValueChange={() => toggle('premium_training')}
-        />
-      </View>
-      <View style={styles.row}>
-        <Text>Online Video</Text>
-        <Switch value={!!entitlements.online_video} onValueChange={() => toggle('online_video')} />
-      </View>
-      <View style={styles.row}>
-        <Text>Advanced Stats</Text>
-        <Switch
-          value={!!entitlements.advanced_stats}
-          onValueChange={() => toggle('advanced_stats')}
-        />
-      </View>
+    <View style={appStyles.screen}>
+      <Text style={appStyles.sectionTitle}>Settings</Text>
+      {items.map((item) => (
+        <View key={item.key} style={styles.row}>
+          <Text style={styles.label}>{item.label}</Text>
+          <Switch value={!!entitlements[item.key]} onValueChange={() => toggle(item.key)} />
+        </View>
+      ))}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 24,
-    backgroundColor: '#ffffff',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderRadius: radius.md,
+    borderColor: colors.border,
+    borderWidth: 1,
+    backgroundColor: colors.surface,
+  },
+  label: {
+    color: colors.text,
+    fontWeight: '600',
   },
 });

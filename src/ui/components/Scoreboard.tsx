@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Player } from '../../shared/types';
+import { colors, radius, spacing } from '../theme';
 
 interface Props {
   players: Player[];
@@ -24,26 +25,33 @@ export const Scoreboard = ({ players, activePlayerId, scores }: Props) => (
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#f3f4f6',
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.sm,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: colors.border,
+    borderRadius: radius.sm,
   },
   activeRow: {
-    backgroundColor: '#e0f2fe',
+    backgroundColor: '#0b3552',
   },
   name: {
     fontSize: 16,
     fontWeight: '600',
+    color: colors.text,
   },
   score: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
+    color: '#f8fafc',
   },
 });

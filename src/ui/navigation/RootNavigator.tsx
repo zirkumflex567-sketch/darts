@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { RootStackParamList } from './types';
 import { HomeScreen } from '../screens/HomeScreen';
@@ -10,12 +10,33 @@ import { SettingsScreen } from '../screens/SettingsScreen';
 import { LobbyScreen } from '../screens/LobbyScreen';
 import { HistoryScreen } from '../screens/HistoryScreen';
 import { MatchDetailScreen } from '../screens/MatchDetailScreen';
+import { colors } from '../theme';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+const appNavigationTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: colors.background,
+    card: colors.surface,
+    border: colors.border,
+    text: colors.text,
+    primary: colors.primary,
+  },
+};
+
 export const RootNavigator = () => (
-  <NavigationContainer>
-    <Stack.Navigator initialRouteName="Home">
+  <NavigationContainer theme={appNavigationTheme}>
+    <Stack.Navigator
+      initialRouteName="Home"
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.surface },
+        headerTintColor: colors.text,
+        contentStyle: { backgroundColor: colors.background },
+        headerShadowVisible: false,
+      }}
+    >
       <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'Dartsmind' }} />
       <Stack.Screen name="ModeSelect" component={ModeSelectScreen} options={{ title: 'Modus' }} />
       <Stack.Screen name="PlayerSetup" component={PlayerSetupScreen} options={{ title: 'Spieler' }} />

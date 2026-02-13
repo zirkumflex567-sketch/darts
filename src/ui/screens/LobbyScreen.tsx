@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, TextInput, Switch } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, Switch } from 'react-native';
 import { lobbyMatches } from '../../data/mocks/lobby';
 import { useEntitlementStore } from '../store/entitlementStore';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { appStyles, colors, radius, spacing } from '../theme';
 
 export const LobbyScreen = () => {
   const [joinCode, setJoinCode] = useState('');
@@ -14,28 +16,31 @@ export const LobbyScreen = () => {
   }, [loadEntitlements]);
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Lobby (Mock)</Text>
-      <Text style={styles.section}>Oeffentliche Matches</Text>
+    <View style={appStyles.screen}>
+      <Text style={appStyles.sectionTitle}>Lobby (Mock)</Text>
+      <Text style={styles.section}>Öffentliche Matches</Text>
       <FlatList
         data={lobbyMatches.filter((m) => !m.isPrivate)}
         keyExtractor={(item) => item.id}
+        ListEmptyComponent={<Text style={styles.empty}>Keine offenen Lobbies gefunden.</Text>}
         renderItem={({ item }) => (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text>{item.mode} · {item.players} Spieler</Text>
+            <Text style={styles.cardMeta}>{item.mode} · {item.players} Spieler</Text>
           </View>
         )}
       />
+
       <Text style={styles.section}>Privates Match beitreten</Text>
       <TextInput
         style={styles.input}
         placeholder="Join-Code"
+        placeholderTextColor={colors.textMuted}
         value={joinCode}
         onChangeText={setJoinCode}
       />
       <View style={styles.row}>
-        <Text>Video aktivieren</Text>
+        <Text style={styles.rowLabel}>Video aktivieren</Text>
         <Switch
           value={videoEnabled}
           onValueChange={(val) => {
@@ -44,68 +49,58 @@ export const LobbyScreen = () => {
           }}
         />
       </View>
-      {!entitlements.online_video && (
-        <Text style={styles.notice}>Video ist gesperrt (Mock-Entitlement).</Text>
-      )}
-      <Pressable style={styles.joinButton}>
-        <Text style={styles.joinText}>Join (Mock)</Text>
-      </Pressable>
+      {!entitlements.online_video && <Text style={styles.notice}>Video ist gesperrt (Mock-Entitlement).</Text>}
+      <PrimaryButton label="Join (Mock)" onPress={() => undefined} />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 24,
-    backgroundColor: '#ffffff',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
   section: {
-    marginTop: 16,
+    marginTop: spacing.sm,
     marginBottom: 8,
     fontWeight: '700',
+    color: colors.text,
+  },
+  empty: {
+    color: colors.textMuted,
+    marginBottom: spacing.md,
   },
   card: {
-    padding: 12,
-    borderRadius: 12,
+    padding: spacing.sm,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: colors.border,
     marginBottom: 8,
+    backgroundColor: colors.surface,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '600',
+    color: colors.text,
+  },
+  cardMeta: {
+    color: colors.textMuted,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
     padding: 10,
+    color: colors.text,
+    backgroundColor: colors.surface,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: spacing.sm,
+  },
+  rowLabel: {
+    color: colors.text,
   },
   notice: {
     marginTop: 8,
-    color: '#b45309',
-  },
-  joinButton: {
-    backgroundColor: '#111827',
-    padding: 12,
-    borderRadius: 10,
-    marginTop: 12,
-  },
-  joinText: {
-    color: '#ffffff',
-    textAlign: 'center',
-    fontWeight: '600',
+    color: colors.warning,
   },
 });

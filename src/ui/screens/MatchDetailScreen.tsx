@@ -4,6 +4,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { createMatchRepository, createStatsRepository } from '../../data/repositories';
 import { MatchRecord, StatsRecord } from '../../shared/types';
+import { appStyles, colors, radius, spacing } from '../theme';
 
 const matchRepo = createMatchRepository();
 const statsRepo = createStatsRepository();
@@ -26,30 +27,34 @@ export const MatchDetailScreen = ({ route }: NativeStackScreenProps<RootStackPar
 
   if (!match) {
     return (
-      <View style={styles.container}>
-        <Text>Match nicht gefunden.</Text>
+      <View style={appStyles.screen}>
+        <Text style={styles.meta}>Match nicht gefunden.</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>Match Details</Text>
-      <Text>Modus: {match.mode}</Text>
-      <Text>Start: {match.startedAt}</Text>
-      <Text>Status: {match.status}</Text>
+    <ScrollView style={appStyles.screen}>
+      <Text style={appStyles.sectionTitle}>Match Details</Text>
+      <View style={styles.card}>
+        <Text style={styles.meta}>Modus: {match.mode}</Text>
+        <Text style={styles.meta}>Start: {match.startedAt}</Text>
+        <Text style={styles.meta}>Status: {match.status}</Text>
+      </View>
       <Text style={styles.section}>Spieler</Text>
-      {match.players.map((p) => (
-        <Text key={p.id}>- {p.name}</Text>
-      ))}
+      <View style={styles.card}>
+        {match.players.map((p) => (
+          <Text key={p.id} style={styles.meta}>• {p.name}</Text>
+        ))}
+      </View>
       <Text style={styles.section}>Stats</Text>
-      {stats.length === 0 && <Text>Keine Stats gespeichert.</Text>}
+      {stats.length === 0 && <Text style={styles.meta}>Keine Stats gespeichert.</Text>}
       {stats.map((s) => (
         <View key={s.id} style={styles.card}>
-          <Text>Player: {match.players.find((p) => p.id === s.playerId)?.name ?? s.playerId}</Text>
-          <Text>3-Dart Avg: {s.threeDartAverage.toFixed(2)}</Text>
-          <Text>Checkout Rate: {(s.checkoutRate * 100).toFixed(0)}%</Text>
-          <Text>Hit Rate: {(s.hitRate * 100).toFixed(0)}%</Text>
+          <Text style={styles.meta}>Player: {match.players.find((p) => p.id === s.playerId)?.name ?? s.playerId}</Text>
+          <Text style={styles.meta}>3-Dart Avg: {s.threeDartAverage.toFixed(2)}</Text>
+          <Text style={styles.meta}>Checkout Rate: {(s.checkoutRate * 100).toFixed(0)}%</Text>
+          <Text style={styles.meta}>Hit Rate: {(s.hitRate * 100).toFixed(0)}%</Text>
         </View>
       ))}
     </ScrollView>
@@ -57,25 +62,22 @@ export const MatchDetailScreen = ({ route }: NativeStackScreenProps<RootStackPar
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 24,
-    backgroundColor: '#ffffff',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
   section: {
-    marginTop: 16,
+    marginTop: spacing.md,
+    marginBottom: 8,
+    color: colors.text,
     fontWeight: '700',
   },
   card: {
-    padding: 10,
+    padding: spacing.md,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
+    borderColor: colors.border,
+    borderRadius: radius.md,
     marginTop: 8,
+    backgroundColor: colors.surface,
+  },
+  meta: {
+    color: colors.textMuted,
+    marginBottom: 4,
   },
 });

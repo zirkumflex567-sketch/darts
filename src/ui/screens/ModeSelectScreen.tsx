@@ -4,13 +4,16 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { useGameStore } from '../store/gameStore';
+import { appStyles, colors, spacing } from '../theme';
 
 export const ModeSelectScreen = ({ navigation }: NativeStackScreenProps<RootStackParamList, 'ModeSelect'>) => {
   const setMode = useGameStore((s) => s.setMode);
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Modus waehlen</Text>
+    <View style={appStyles.screen}>
+      <Text style={appStyles.sectionTitle}>Modus wählen</Text>
+      <Text style={styles.copy}>Wähle den Spielmodus für dein nächstes Match.</Text>
+
       <PrimaryButton
         label="X01 (MVP)"
         onPress={() => {
@@ -20,6 +23,7 @@ export const ModeSelectScreen = ({ navigation }: NativeStackScreenProps<RootStac
       />
       <PrimaryButton
         label="Cricket"
+        variant="secondary"
         onPress={() => {
           setMode('CRICKET');
           navigation.navigate('PlayerSetup', { mode: 'CRICKET' });
@@ -30,14 +34,8 @@ export const ModeSelectScreen = ({ navigation }: NativeStackScreenProps<RootStac
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 24,
-    backgroundColor: '#ffffff',
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 16,
+  copy: {
+    color: colors.textMuted,
+    marginBottom: spacing.md,
   },
 });

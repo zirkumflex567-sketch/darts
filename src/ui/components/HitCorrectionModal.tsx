@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
 import { ScoringHit } from '../../domain/scoring/types';
+import { colors, radius, spacing } from '../theme';
 
 interface Props {
   visible: boolean;
@@ -40,12 +41,7 @@ export const HitCorrectionModal = ({ visible, hit, onConfirm, onCancel }: Props)
         <View style={styles.card}>
           <Text style={styles.title}>Treffer korrigieren</Text>
           <Text style={styles.label}>Segment (1-20 oder 25)</Text>
-          <TextInput
-            style={styles.input}
-            keyboardType="numeric"
-            value={segment}
-            onChangeText={setSegment}
-          />
+          <TextInput style={styles.input} keyboardType="numeric" value={segment} onChangeText={setSegment} />
           <Text style={styles.label}>Multiplikator</Text>
           <View style={styles.row}>
             {(['S', 'D', 'T'] as const).map((m) => (
@@ -54,16 +50,16 @@ export const HitCorrectionModal = ({ visible, hit, onConfirm, onCancel }: Props)
                 style={[styles.choice, multiplier === m && styles.choiceActive]}
                 onPress={() => setMultiplier(m)}
               >
-                <Text style={styles.choiceText}>{m}</Text>
+                <Text style={[styles.choiceText, multiplier === m && styles.choiceTextActive]}>{m}</Text>
               </Pressable>
             ))}
           </View>
           <View style={styles.actions}>
             <Pressable style={styles.cancel} onPress={onCancel}>
-              <Text>Abbrechen</Text>
+              <Text style={styles.cancelText}>Abbrechen</Text>
             </Pressable>
             <Pressable style={styles.confirm} onPress={submit}>
-              <Text style={styles.confirmText}>Uebernehmen</Text>
+              <Text style={styles.confirmText}>Übernehmen</Text>
             </Pressable>
           </View>
         </View>
@@ -75,62 +71,74 @@ export const HitCorrectionModal = ({ visible, hit, onConfirm, onCancel }: Props)
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(2,6,23,0.75)',
     justifyContent: 'center',
     padding: 20,
   },
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     padding: 20,
-    borderRadius: 12,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   title: {
     fontSize: 18,
     fontWeight: '700',
-    marginBottom: 12,
+    marginBottom: spacing.sm,
+    color: colors.text,
   },
   label: {
     fontSize: 14,
-    marginTop: 10,
+    marginTop: spacing.sm,
+    color: colors.textMuted,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    padding: 8,
-    borderRadius: 8,
+    borderColor: colors.border,
+    padding: 10,
+    borderRadius: radius.sm,
     marginTop: 6,
+    color: colors.text,
   },
   row: {
     flexDirection: 'row',
-    marginTop: 8,
+    marginTop: spacing.sm,
   },
   choice: {
     paddingVertical: 8,
     paddingHorizontal: 12,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
   },
   choiceActive: {
-    backgroundColor: '#111827',
+    backgroundColor: colors.primaryStrong,
+    borderColor: '#0284c7',
   },
   choiceText: {
-    color: '#111827',
+    color: colors.text,
     fontWeight: '600',
+  },
+  choiceTextActive: {
+    color: '#f8fafc',
   },
   actions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 16,
+    marginTop: spacing.md,
   },
   cancel: {
     padding: 10,
   },
+  cancelText: {
+    color: colors.textMuted,
+  },
   confirm: {
-    backgroundColor: '#111827',
+    backgroundColor: colors.primaryStrong,
     padding: 10,
-    borderRadius: 8,
+    borderRadius: radius.sm,
   },
   confirmText: {
     color: '#ffffff',

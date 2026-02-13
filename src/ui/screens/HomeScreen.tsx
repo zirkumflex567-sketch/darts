@@ -3,33 +3,39 @@ import { View, Text, StyleSheet } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { appStyles, colors, radius, spacing } from '../theme';
 
 export const HomeScreen = ({ navigation }: NativeStackScreenProps<RootStackParamList, 'Home'>) => (
-  <View style={styles.container}>
-    <Text style={styles.title}>Dartsmind MVP</Text>
-    <Text style={styles.subtitle}>Autoscoring, Offline-First, Web + Mobile</Text>
-    <PrimaryButton label="Neues Match" onPress={() => navigation.navigate('ModeSelect')} />
-    <PrimaryButton label="Lobby" onPress={() => navigation.navigate('Lobby')} />
-    <PrimaryButton label="Historie" onPress={() => navigation.navigate('History')} />
-    <PrimaryButton label="Settings" onPress={() => navigation.navigate('Settings')} />
+  <View style={appStyles.screen}>
+    <View style={styles.hero}>
+      <Text style={appStyles.title}>Dartsmind</Text>
+      <Text style={styles.subtitle}>Autoscoring • Offline-First • Web + Mobile</Text>
+    </View>
+
+    <View style={styles.actions}>
+      <PrimaryButton label="Neues Match" onPress={() => navigation.navigate('ModeSelect')} />
+      <PrimaryButton label="Lobby" variant="secondary" onPress={() => navigation.navigate('Lobby')} />
+      <PrimaryButton label="Historie" variant="secondary" onPress={() => navigation.navigate('History')} />
+      <PrimaryButton label="Settings" variant="ghost" onPress={() => navigation.navigate('Settings')} />
+    </View>
   </View>
 );
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 24,
-    backgroundColor: '#ffffff',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    marginBottom: 6,
+  hero: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginTop: 12,
   },
   subtitle: {
     fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 20,
+    color: colors.textMuted,
+    marginTop: 8,
+  },
+  actions: {
+    marginTop: 22,
   },
 });

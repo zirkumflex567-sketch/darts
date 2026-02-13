@@ -5,6 +5,7 @@ import { Scoreboard } from '../components/Scoreboard';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { HitCorrectionModal } from '../components/HitCorrectionModal';
 import { CameraScoringView } from '../components/CameraScoringView';
+import { appStyles, colors, spacing } from '../theme';
 
 export const GameScreen = () => {
   const match = useGameStore((s) => s.match);
@@ -24,8 +25,8 @@ export const GameScreen = () => {
 
   if (!match) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Kein aktives Match</Text>
+      <View style={appStyles.screen}>
+        <Text style={appStyles.sectionTitle}>Kein aktives Match</Text>
       </View>
     );
   }
@@ -34,21 +35,23 @@ export const GameScreen = () => {
   const scores = mode === 'X01' ? x01State?.remaining : cricketState?.points;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Match: {mode}</Text>
+    <ScrollView style={appStyles.screen} contentContainerStyle={styles.content}>
+      <Text style={appStyles.sectionTitle}>Match: {mode}</Text>
       {cameraEnabled && <CameraScoringView onDetect={queueDetectedHit} />}
       <Scoreboard players={match.players} activePlayerId={activePlayerId} scores={scores} />
       <View style={styles.actions}>
         <PrimaryButton
           label={cameraEnabled ? 'Kamera aus' : 'Kamera an (Tap-Erkennung)'}
           onPress={() => setCameraEnabled((prev) => !prev)}
+          variant="secondary"
         />
         <PrimaryButton
           label={dummyScoringActive ? 'Autoscoring Dummy stoppen' : 'Autoscoring Dummy starten'}
           onPress={toggleDummyScoring}
+          variant="secondary"
         />
         <PrimaryButton label="Manueller Wurf" onPress={openManualHit} />
-        <PrimaryButton label="Undo" onPress={undoLastVisit} />
+        <PrimaryButton label="Undo" onPress={undoLastVisit} variant="ghost" />
       </View>
       <HitCorrectionModal
         visible={hitModalOpen}
@@ -61,21 +64,13 @@ export const GameScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    backgroundColor: '#ffffff',
-  },
   content: {
     paddingBottom: 32,
   },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
   actions: {
-    marginTop: 16,
+    marginTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.sm,
   },
 });
