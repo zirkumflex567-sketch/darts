@@ -1,11 +1,26 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, LayoutChangeEvent, Modal, Image, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  LayoutChangeEvent,
+  Modal,
+  Image,
+  ScrollView,
+  GestureResponderEvent,
+} from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission, useFrameProcessor } from 'react-native-vision-camera';
-import { PinchGestureHandler, State } from 'react-native-gesture-handler';
+import {
+  PinchGestureHandler,
+  State,
+  PinchGestureHandlerGestureEvent,
+  PinchGestureHandlerStateChangeEvent,
+} from 'react-native-gesture-handler';
 import { runOnJS, useSharedValue } from 'react-native-reanimated';
 import { createResizePlugin } from 'vision-camera-resize-plugin';
 import Slider from '@react-native-community/slider';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Asset } from 'expo-asset';
 import { toByteArray } from 'base64-js';
 import { decode as decodeJpeg } from 'jpeg-js';
@@ -23,13 +38,13 @@ import {
   DatasetSample,
   removeDatasetSample,
 } from '../utils/datasetStorage';
+import DEFAULT_TEST_IMAGE from '../../../assets/dartboard-default.jpg';
 
 const BOARD_NUMBERS = [
   20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5,
 ];
 
 const { resize } = createResizePlugin();
-const DEFAULT_TEST_IMAGE = require('../../../assets/dartboard-default.jpg');
 const DEFAULT_TEST_IMAGE_INFO = Image.resolveAssetSource(DEFAULT_TEST_IMAGE);
 const SCALE_MIN = 0.2;
 const SCALE_MAX = 1.8;
@@ -109,12 +124,18 @@ const computeHit = (
   return { segment, multiplier: 'D', points: segment * 2, source: 'AUTO' };
 };
 
+const toNumberArrayLike = (value: unknown): ArrayLike<number> | null => {
+  if (!value) return null;
+  const candidate = value as ArrayLike<number>;
+  return typeof candidate.length === 'number' ? candidate : null;
+};
+
 export const CameraScoringView = ({ onDetect }: Props) => {
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice('back');
   const [cameraLayout, setCameraLayout] = useState({ width: 0, height: 0 });
   const [setupMode, setSetupMode] = useState(false);
-  const [useSampleImage, setUseSampleImage] = useState(true);
+  const [useSampleImage, setUseSampleImage] = useState(false);
   const [calibrationStep, setCalibrationStep] = useState<number | null>(null);
   const [calibrationDraft, setCalibrationDraft] = useState<Point[]>([]);
   const [liveZoom, setLiveZoom] = useState(0);
@@ -132,10 +153,10 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   const [sampleStatus, setSampleStatus] = useState<string | null>(null);
   const [sampleDetection, setSampleDetection] = useState<{ x: number; y: number; conf: number } | null>(null);
   const [simStatus, setSimStatus] = useState<string | null>(null);
-  const [lastSimHit, setLastSimHit] = useState<ScoringHit | null>(null);
   const [debugOverlay, setDebugOverlay] = useState(true);
   const [debugNumbers, setDebugNumbers] = useState(true);
   const [debugZones, setDebugZones] = useState(true);
+  const [debugOpacity, setDebugOpacity] = useState(0.22);
   const cameraRef = useRef<Camera>(null);
   const pinchStartZoom = useRef(0);
 
@@ -198,7 +219,7 @@ export const CameraScoringView = ({ onDetect }: Props) => {
           setModelSourceUrl(modelUrl);
           setModelStatus('Modell geladen');
         }
-      } catch (err) {
+      } catch {
         if (mounted) setModelStatus('Modell konnte nicht geladen werden');
       }
     };
@@ -295,7 +316,7 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     setCameraLayout({ width, height });
   };
 
-  const onTouch = (event: any) => {
+  const onTouch = (event: GestureResponderEvent) => {
     if (!ready) return;
     const { locationX, locationY } = event.nativeEvent;
     if (calibrationStep !== null) {
@@ -322,19 +343,17 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     }
     const hit = computeHit(locationX, locationY, cameraLayout.width, cameraLayout.height, settings);
     if (hit) {
-      setLastSimHit(hit);
       setSimStatus(`Sim: ${hit.multiplier}${hit.segment} (${hit.points})`);
       if (!useSampleImage) {
         onDetect(hit);
       }
       return;
     }
-    setLastSimHit(null);
     setSimStatus('Sim: ausserhalb');
   };
 
   const onPinchEvent = useCallback(
-    (event: any) => {
+    (event: PinchGestureHandlerGestureEvent) => {
       const scale = event.nativeEvent.scale ?? 1;
       const nextZoom = clamp(pinchStartZoom.current + (scale - 1) * 0.3, 0, 1);
       setLiveZoom(nextZoom);
@@ -343,7 +362,7 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   );
 
   const onPinchStateChange = useCallback(
-    (event: any) => {
+    (event: PinchGestureHandlerStateChangeEvent) => {
       const state = event.nativeEvent.state;
       if (state === State.BEGAN) {
         pinchStartZoom.current = liveZoom;
@@ -361,18 +380,34 @@ export const CameraScoringView = ({ onDetect }: Props) => {
       return;
     }
     try {
-      setSampleStatus('Analysiere Testbild...');
+      const sourceLabel = useSampleImage ? 'Testbild' : 'Live-Kamera';
+      setSampleStatus(`Analysiere ${sourceLabel}...`);
       setSampleDetection(null);
-      const asset = Asset.fromModule(DEFAULT_TEST_IMAGE);
-      await asset.downloadAsync();
-      const uri = asset.localUri ?? asset.uri;
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      let base64 = '';
+      if (useSampleImage) {
+        const asset = Asset.fromModule(DEFAULT_TEST_IMAGE);
+        await asset.downloadAsync();
+        const uri = asset.localUri ?? asset.uri;
+        base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      } else {
+        if (!cameraRef.current) {
+          setSampleStatus('Kamera nicht bereit');
+          return;
+        }
+        const photo = await cameraRef.current.takePhoto({
+          flash: 'off',
+        });
+        const sourcePath = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
+        base64 = await FileSystem.readAsStringAsync(sourcePath, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      }
       const bytes = toByteArray(base64);
       const decoded = decodeJpeg(bytes, { useTArray: true });
-      const srcW = decoded.width || sampleImageWidth;
-      const srcH = decoded.height || sampleImageHeight;
+      const srcW = decoded.width || (useSampleImage ? sampleImageWidth : mlInputSize);
+      const srcH = decoded.height || (useSampleImage ? sampleImageHeight : mlInputSize);
       const src = decoded.data;
       const input = new Float32Array(mlInputSize * mlInputSize * 3);
       for (let y = 0; y < mlInputSize; y += 1) {
@@ -391,29 +426,33 @@ export const CameraScoringView = ({ onDetect }: Props) => {
         setSampleStatus('Keine ML Ausgabe');
         return;
       }
-      const output = outputs[0] as any;
-      const decode = (arr: any, inputSize: number, threshold: number) => {
+      const output = toNumberArrayLike(outputs[0]);
+      if (!output) {
+        setSampleStatus('ML Ausgabe ungueltig');
+        return;
+      }
+      const decode = (arr: ArrayLike<number>, inputSize: number, threshold: number) => {
         let bestConf = 0;
         let bestX = 0;
         let bestY = 0;
         const len = arr.length ?? 0;
         if (len % 6 === 0) {
           for (let i = 0; i < len; i += 6) {
-            const conf = arr[i + 4];
+            const conf = Number(arr[i + 4] ?? 0);
             if (conf > bestConf) {
               bestConf = conf;
-              bestX = arr[i];
-              bestY = arr[i + 1];
+              bestX = Number(arr[i] ?? 0);
+              bestY = Number(arr[i + 1] ?? 0);
             }
           }
         } else if (len % 84 === 0) {
           const stride = len / 84;
           for (let i = 0; i < stride; i += 1) {
-            const x = arr[i];
-            const y = arr[i + stride];
+            const x = Number(arr[i] ?? 0);
+            const y = Number(arr[i + stride] ?? 0);
             let cls = 0;
             for (let c = 4; c < 84; c += 1) {
-              const score = arr[i + c * stride];
+              const score = Number(arr[i + c * stride] ?? 0);
               if (score > cls) cls = score;
             }
             if (cls > bestConf) {
@@ -435,21 +474,21 @@ export const CameraScoringView = ({ onDetect }: Props) => {
       };
       const detection = decode(output, mlInputSize, mlConfidence);
       if (!detection) {
-        setSampleStatus('Keine Erkennung im Testbild');
+        setSampleStatus(`Keine Erkennung in ${sourceLabel}`);
         return;
       }
       setSampleDetection({ x: detection.nx, y: detection.ny, conf: detection.conf });
       setSampleStatus(`Erkennung: ${(detection.conf * 100).toFixed(1)}%`);
-    } catch (err) {
-      setSampleStatus('Testbild-Analyse fehlgeschlagen');
+    } catch {
+      setSampleStatus('Analyse fehlgeschlagen');
     }
-  }, [mlConfidence, mlModel, mlInputSize, sampleImageHeight, sampleImageWidth]);
+  }, [mlConfidence, mlModel, mlInputSize, sampleImageHeight, sampleImageWidth, useSampleImage]);
 
-  const autoCalibrateFromSample = useCallback(async () => {
+  const runTeachCalibration = useCallback(async () => {
     if (!kpModel) {
       const ok = await ensureKeypointModel();
       if (!ok) return;
-      setSampleStatus('Keypoint Modell lädt, bitte erneut starten');
+      setSampleStatus('Keypoint Modell laedt, bitte erneut starten');
       return;
     }
     if (cameraLayout.width === 0 || cameraLayout.height === 0) {
@@ -457,17 +496,33 @@ export const CameraScoringView = ({ onDetect }: Props) => {
       return;
     }
     try {
-      setSampleStatus('Auto-Kalibrierung läuft...');
-      const asset = Asset.fromModule(DEFAULT_TEST_IMAGE);
-      await asset.downloadAsync();
-      const uri = asset.localUri ?? asset.uri;
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      const sourceLabel = useSampleImage ? 'Testbild' : 'Live-Kamera';
+      setSampleStatus(`Teach laeuft (${sourceLabel})...`);
+      let base64 = '';
+      if (useSampleImage) {
+        const asset = Asset.fromModule(DEFAULT_TEST_IMAGE);
+        await asset.downloadAsync();
+        const uri = asset.localUri ?? asset.uri;
+        base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      } else {
+        if (!cameraRef.current) {
+          setSampleStatus('Kamera nicht bereit');
+          return;
+        }
+        const photo = await cameraRef.current.takePhoto({
+          flash: 'off',
+        });
+        const sourcePath = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
+        base64 = await FileSystem.readAsStringAsync(sourcePath, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      }
       const bytes = toByteArray(base64);
       const decoded = decodeJpeg(bytes, { useTArray: true });
-      const srcW = decoded.width || sampleImageWidth;
-      const srcH = decoded.height || sampleImageHeight;
+      const srcW = decoded.width || (useSampleImage ? sampleImageWidth : mlInputSize);
+      const srcH = decoded.height || (useSampleImage ? sampleImageHeight : mlInputSize);
       const src = decoded.data;
       const input = new Float32Array(mlInputSize * mlInputSize * 3);
       for (let y = 0; y < mlInputSize; y += 1) {
@@ -486,7 +541,11 @@ export const CameraScoringView = ({ onDetect }: Props) => {
         setSampleStatus('Keine Keypoint Ausgabe');
         return;
       }
-      const output = outputs[0] as any;
+      const output = toNumberArrayLike(outputs[0]);
+      if (!output) {
+        setSampleStatus('Keypoint Ausgabe ungueltig');
+        return;
+      }
       const len = output.length ?? 0;
       if (len < 8) {
         setSampleStatus('Keypoint Ausgabe zu klein');
@@ -494,8 +553,8 @@ export const CameraScoringView = ({ onDetect }: Props) => {
       }
       const points: Point[] = [];
       for (let i = 0; i < 8; i += 2) {
-        let x = Number(output[i]);
-        let y = Number(output[i + 1]);
+        let x = Number(output[i] ?? 0);
+        let y = Number(output[i + 1] ?? 0);
         if (x > 1 || y > 1) {
           x = x / mlInputSize;
           y = y / mlInputSize;
@@ -530,11 +589,14 @@ export const CameraScoringView = ({ onDetect }: Props) => {
         scale: clamp(scale, SCALE_MIN, SCALE_MAX),
         rotationDeg,
       });
-      setSampleStatus('Auto-Kalibrierung gesetzt');
+      setDebugOverlay(true);
+      setDebugZones(true);
+      setSetupMode(true);
+      setSampleStatus(`Teach erfolgreich (${sourceLabel})`);
       setCalibrationStep(null);
       setCalibrationDraft([]);
     } catch {
-      setSampleStatus('Auto-Kalibrierung fehlgeschlagen');
+      setSampleStatus('Teach fehlgeschlagen');
     }
   }, [
     cameraLayout.height,
@@ -544,9 +606,9 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     mlInputSize,
     sampleImageHeight,
     sampleImageWidth,
+    useSampleImage,
     update,
   ]);
-
   const captureDatasetSample = useCallback(async () => {
     if (!cameraRef.current) return;
     setDatasetStatus('Capture laeuft...');
@@ -554,8 +616,6 @@ export const CameraScoringView = ({ onDetect }: Props) => {
       await ensureDatasetDir();
       const photo = await cameraRef.current.takePhoto({
         flash: 'off',
-        enableAutoStabilization: true,
-        qualityPrioritization: 'quality',
       });
       const sourcePath = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
       const id = `${Date.now()}`;
@@ -591,7 +651,7 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     setAnnotationLayout({ width, height });
   };
 
-  const onAnnotationTap = (event: any) => {
+  const onAnnotationTap = (event: GestureResponderEvent) => {
     if (!pendingSample) return;
     const { locationX, locationY } = event.nativeEvent;
     const { width: containerW, height: containerH } = annotationLayout;
@@ -668,14 +728,19 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     (frame) => {
       'worklet';
       // persistent state inside worklet runtime
-      // eslint-disable-next-line no-undef
-      const state = global.__dartsmindRealtimeState || {
+      const globalWithState = global as typeof globalThis & {
+        __dartsmindRealtimeState?: {
+          baselineBuffer: Float32Array | null;
+          lastBaselineRequest: number;
+          lastHitTs: number;
+        };
+      };
+      const state = globalWithState.__dartsmindRealtimeState || {
         baselineBuffer: null,
         lastBaselineRequest: 0,
         lastHitTs: 0,
       };
-      // eslint-disable-next-line no-undef
-      global.__dartsmindRealtimeState = state;
+      globalWithState.__dartsmindRealtimeState = state;
 
       if (autoScanValue.value !== 1) return;
 
@@ -699,9 +764,9 @@ export const CameraScoringView = ({ onDetect }: Props) => {
 
         const outputs = mlModel.runSync([resized]);
         if (!outputs || outputs.length === 0) return;
-        const output = outputs[0];
+        const output = outputs[0] as ArrayLike<number>;
 
-        const decode = (arr, inputSize, threshold) => {
+        const decode = (arr: ArrayLike<number>, inputSize: number, threshold: number) => {
           'worklet';
           let bestConf = 0;
           let bestX = 0;
@@ -828,25 +893,6 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     ]
   );
 
-  if (!useSampleImage && !hasPermission) {
-    return (
-      <View style={styles.permission}>
-        <Text style={styles.permissionText}>Kamera-Berechtigung erforderlich.</Text>
-        <Pressable style={styles.permissionButton} onPress={() => requestPermission()}>
-          <Text style={styles.permissionButtonText}>Berechtigung erteilen</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  if (!useSampleImage && !device) {
-    return (
-      <View style={styles.permission}>
-        <Text style={styles.permissionText}>Keine Kamera gefunden.</Text>
-      </View>
-    );
-  }
-
   const zoomMin = device?.minZoom ?? 1;
   const zoomMax = device?.maxZoom ?? 1;
   const zoomValue = zoomMin + (zoomMax - zoomMin) * clamp(liveZoom, 0, 1);
@@ -882,6 +928,7 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     const cx = cameraLayout.width * settings.centerX;
     const cy = cameraLayout.height * settings.centerY;
     const zones: { key: string; d: string; fill: string }[] = [];
+    const baseOpacity = clamp(debugOpacity, 0.05, 0.6);
     const ringDefs = [
       { key: 'singleInner', r0: 0.1, r1: 0.55 },
       { key: 'triple', r0: 0.55, r1: 0.65 },
@@ -926,13 +973,21 @@ export const CameraScoringView = ({ onDetect }: Props) => {
       ringDefs.forEach((ring, ringIndex) => {
         const d = buildWedgePath(startN, endN, boardRadius * ring.r0, boardRadius * ring.r1);
         const even = i % 2 === 0;
-        const ringShade = ringIndex % 2 === 0 ? 0.22 : 0.14;
+        const ringShade = ringIndex % 2 === 0 ? baseOpacity : baseOpacity * 0.6;
         const base = even ? 'rgba(16,185,129,' : 'rgba(239,68,68,';
         zones.push({ key: `${ring.key}-${i}`, d, fill: `${base}${ringShade})` });
       });
     }
     return zones;
-  }, [boardRadius, cameraLayout.height, cameraLayout.width, settings.centerX, settings.centerY, settings.rotationDeg]);
+  }, [
+    boardRadius,
+    cameraLayout.height,
+    cameraLayout.width,
+    debugOpacity,
+    settings.centerX,
+    settings.centerY,
+    settings.rotationDeg,
+  ]);
 
   const markerPosition = useMemo(() => {
     if (!pendingSample || !annotationPoint) return null;
@@ -953,10 +1008,16 @@ export const CameraScoringView = ({ onDetect }: Props) => {
   }, [annotationLayout.height, annotationLayout.width, annotationPoint, pendingSample]);
 
   const sampleMarkerPosition = useMemo(() => {
-    if (!useSampleImage || !sampleDetection) return null;
+    if (!sampleDetection) return null;
     const containerW = cameraLayout.width;
     const containerH = cameraLayout.height;
     if (containerW === 0 || containerH === 0) return null;
+    if (!useSampleImage) {
+      return {
+        left: sampleDetection.x * containerW - 6,
+        top: sampleDetection.y * containerH - 6,
+      };
+    }
     const imageW = sampleImageWidth;
     const imageH = sampleImageHeight;
     const scale = Math.min(containerW / imageW, containerH / imageH);
@@ -977,6 +1038,25 @@ export const CameraScoringView = ({ onDetect }: Props) => {
     useSampleImage,
   ]);
 
+  if (!useSampleImage && !hasPermission) {
+    return (
+      <View style={styles.permission}>
+        <Text style={styles.permissionText}>Kamera-Berechtigung erforderlich.</Text>
+        <Pressable style={styles.permissionButton} onPress={() => requestPermission()}>
+          <Text style={styles.permissionButtonText}>Berechtigung erteilen</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (!useSampleImage && !device) {
+    return (
+      <View style={styles.permission}>
+        <Text style={styles.permissionText}>Keine Kamera gefunden.</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <PinchGestureHandler onGestureEvent={onPinchEvent} onHandlerStateChange={onPinchStateChange}>
@@ -987,18 +1067,17 @@ export const CameraScoringView = ({ onDetect }: Props) => {
             <Camera
               ref={cameraRef}
               style={styles.camera}
-              device={device}
+              device={device!}
               isActive
               zoom={zoomValue}
               format={format}
               frameProcessor={frameProcessor}
-              frameProcessorFps={mlEnabled ? 4 : 6}
             />
           )}
           <Pressable style={styles.touchLayer} onPress={onTouch}>
             {debugOverlay && (
               <View pointerEvents="none" style={styles.debugOverlay}>
-                <Svg height={cameraLayout.height} width={cameraLayout.width} style={StyleSheet.absoluteFillObject}>
+                <Svg height={cameraLayout.height} width={cameraLayout.width} style={[StyleSheet.absoluteFillObject]}>
                   {debugZones &&
                     zonePaths.map((zone) => (
                       <Path key={zone.key} d={zone.d} fill={zone.fill} stroke="rgba(0,0,0,0.08)" strokeWidth={0.5} />
@@ -1030,6 +1109,7 @@ export const CameraScoringView = ({ onDetect }: Props) => {
                         height: boardRadius * 2 * ratio,
                         left: boardLeft + boardRadius * (1 - ratio),
                         top: boardTop + boardRadius * (1 - ratio),
+                        opacity: debugOpacity,
                       },
                     ]}
                   />
@@ -1044,6 +1124,7 @@ export const CameraScoringView = ({ onDetect }: Props) => {
                         top: cameraLayout.height * settings.centerY - boardRadius,
                         height: boardRadius,
                         transform: [{ rotateZ: `${deg}deg` }],
+                        opacity: debugOpacity,
                       },
                     ]}
                   />
@@ -1102,6 +1183,20 @@ export const CameraScoringView = ({ onDetect }: Props) => {
                 ))}
               </View>
             )}
+            {hasCalibration && calibrationStep === null &&
+              settings.calibrationPoints?.map((pt, index) => (
+                <View
+                  key={`calib-live-${index}`}
+                  pointerEvents="none"
+                  style={[
+                    styles.calibrationPoint,
+                    {
+                      left: pt.x * cameraLayout.width - 6,
+                      top: pt.y * cameraLayout.height - 6,
+                    },
+                  ]}
+                />
+              ))}
             {simStatus && <Text style={styles.simBadge}>{simStatus}</Text>}
             {sampleMarkerPosition && (
               <View
@@ -1160,10 +1255,25 @@ export const CameraScoringView = ({ onDetect }: Props) => {
             </Pressable>
           </View>
           <Text style={styles.meta}>
-            Center: {settings.centerX.toFixed(3)}, {settings.centerY.toFixed(3)} | Scale: {settings.scale.toFixed(3)} |
+            Center: {settings.centerX.toFixed(3)}, {settings.centerY.toFixed(3)} | Scale: {settings.scale.toFixed(2)} |
             Rot: {settings.rotationDeg}°
           </Text>
         </View>
+        <View style={styles.adjustRow}>
+          <Text style={styles.label}>Debug Transparenz</Text>
+          <View style={styles.controls}>
+            <Text>{debugOpacity.toFixed(2)}</Text>
+          </View>
+        </View>
+        <Slider
+          value={debugOpacity}
+          onValueChange={(value) => setDebugOpacity(Number(value.toFixed(2)))}
+          minimumValue={0.05}
+          maximumValue={0.6}
+          step={0.01}
+          minimumTrackTintColor="#111827"
+          maximumTrackTintColor="#d1d5db"
+        />
         <Text style={styles.label}>Zoom</Text>
         <Slider
           value={liveZoom}
@@ -1206,14 +1316,14 @@ export const CameraScoringView = ({ onDetect }: Props) => {
           <View style={styles.controls}>
             <Pressable
               style={styles.controlButton}
-              onPress={() => update({ scale: clamp(settings.scale - 0.05, SCALE_MIN, SCALE_MAX) })}
+              onPress={() => update({ scale: clamp(settings.scale - 0.01, SCALE_MIN, SCALE_MAX) })}
             >
               <Text>-</Text>
             </Pressable>
             <Text>{settings.scale.toFixed(2)}</Text>
             <Pressable
               style={styles.controlButton}
-              onPress={() => update({ scale: clamp(settings.scale + 0.05, SCALE_MIN, SCALE_MAX) })}
+              onPress={() => update({ scale: clamp(settings.scale + 0.01, SCALE_MIN, SCALE_MAX) })}
             >
               <Text>+</Text>
             </Pressable>
@@ -1336,13 +1446,16 @@ export const CameraScoringView = ({ onDetect }: Props) => {
           </View>
           <Text style={styles.meta}>Model Pfad: {modelUrl}</Text>
         <View style={styles.adjustRow}>
-          <Text style={styles.label}>Testbild Analyse</Text>
+          <Text style={styles.label}>Erkennen / Teach</Text>
+          <Text style={styles.meta}>
+            Erkennen nutzt {useSampleImage ? 'Testbild' : 'Live-Kamera'}, Teach kalibriert das Board automatisch.
+          </Text>
           <View style={styles.controls}>
             <Pressable style={styles.controlButton} onPress={analyzeSampleImage}>
-              <Text>Analysieren</Text>
+              <Text>Erkennen</Text>
             </Pressable>
-            <Pressable style={styles.controlButton} onPress={autoCalibrateFromSample}>
-              <Text>Auto-Kalibrieren (ML)</Text>
+            <Pressable style={styles.controlButton} onPress={runTeachCalibration}>
+              <Text>Erkennen/Teach</Text>
             </Pressable>
           </View>
           {sampleStatus && <Text style={styles.meta}>{sampleStatus}</Text>}
@@ -1626,3 +1739,4 @@ const styles = StyleSheet.create({
     borderColor: '#ffffff',
   },
 });
+
