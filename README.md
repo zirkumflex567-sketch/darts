@@ -1,46 +1,53 @@
-# darts
+# Dartsmind (darts)
 
-Dartsmind MVP als React-Native-(Expo)-App mit Web-Unterstuetzung.
+React Native / Expo app for darts scoring with:
+- classic game modes (X01, Cricket)
+- local persistence (SQLite / fallback storage)
+- camera-assisted scoring pipeline (native)
+- ML assets + training/export workflow
 
-## Schnellstart (VPS)
+## Quick start
+
 ```bash
 npm install
-npm run dev:web
+npm run dev
 ```
 
-Weitere Kommandos:
+Useful variants:
+
 ```bash
-npm run dev
-npm run dev:tunnel
-npm run dev:client
+npm run dev:web
+npm run android
+npm run ios
 npm test
 npm run lint
 ```
 
-## Custom Dev Client
-Fuer Kamera/ML Features wird ein Custom Dev Client benoetigt.
-Siehe: `docs/DEV_CLIENT.md`
+## Project structure
 
-## Aktueller Stand (2026-02-08)
-- Kamera-Setup + Debug-Overlay in `CameraScoringView`
-- Testbild vorhanden: `assets/dartboard-default.jpg` (Toggle in der UI)
-- ML Modelle (remote):
-  - Dart-Tip: `dart_tip_2026-02-08.tflite`
-  - Board-Keypoints: `board_kp_2026-02-08.tflite`
-- Live Tracking laeuft im Dev Client (Auto-Scan/ML Start)
+- `src/domain/` game engines and pure domain logic
+- `src/data/` repositories, storage, entitlement, scoring providers
+- `src/ui/` screens, components, stores, camera/scoring helpers
+- `ml/` model-related scripts/assets
+- `tests/` domain/data tests
+- `docs/` project documentation
 
-## Doku
-- Ausfuehrliche Doku: `docs/APP_DOC.md`
-- Architektur: `docs/ARCHITECTURE.md`
-- Domain Model: `docs/DOMAIN_MODEL.md`
-- Autoscoring Plan: `docs/AUTOSCORING_PLAN.md`
-- Prompt-Ablauf: `docs/prompts/00-README.md`
+## Documentation index
 
+- **Project docs index:** [`docs/README.md`](docs/README.md)
+- Setup & local dev: [`docs/SETUP.md`](docs/SETUP.md)
+- Architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- ML + model lifecycle: [`docs/ML_PIPELINE.md`](docs/ML_PIPELINE.md)
+- Operations & release checklist: [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
+- OpenClaw collaboration guide: [`docs/OPENCLAW.md`](docs/OPENCLAW.md)
 
+## Archived legacy docs
 
-## here are some examples of working apps
-https://www.reddit.com/r/Darts/comments/dlsftt/introducing_ios_darts_app_dartsmind/?tl=de
-https://github.com/DartCaller/darts-recognition
-https://github.com/kcapp
-https://github.com/gsbrown/darts-app
-https://github.com/lbormann/darts-hub
+Previous documentation was archived to:
+
+- [`docs/archive/2026-02-13/`](docs/archive/2026-02-13/)
+
+## Notes
+
+- This repo currently contains large local artifacts (`runs/`, `.venv*`, model binaries). For long-term hygiene, keep only required, reproducible assets in Git and publish heavy artifacts via release storage.
+- Camera/ML features are native-first; web mode is best for UI/dev workflow, not full camera inference parity.
